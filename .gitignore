@@ -1,0 +1,49 @@
+# Logs
+*.log
+
+# Ignorar PDFs
+*.pdf
+*.PDF
+
+# Ignorar XMLs
+*.xml
+*.XML
+
+# Ignorar Excel
+*.xls
+*.xlsx
+*.xlsm
+*.csv
+*.XLS
+*.XLSX
+*.XLSM
+*.CSV
+
+# Ignorar archivos de texto
+*.txt
+*.TXT
+
+# Cache / temporales
+/tmp/
+/cache/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Backups
+*.sql
+*.SQL
+*.zip
+*.ZIP
+
+# htaccess
+.htaccess
+
+# Ignorar ciertas carpetas y archivos
+2cnytm029mp3r/cm293uc5904uh.php
+imagenes/*
+plantilla/*
+vm39845um223u/b56bn627tb30td.php
+vm39845um223u/c91ktn24g7if5u.php
+webprint/*
