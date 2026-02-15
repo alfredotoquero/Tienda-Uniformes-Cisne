@@ -761,8 +761,7 @@ class Pagos{
                     // Obtener correo del cliente
                     $query = "
                     select
-                        correo,
-                        tienda
+                        correo
                     from
                         tclientes
                     where
