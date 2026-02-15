@@ -7,7 +7,7 @@ class Correos{
     private $con;
 
     function __construct(){
-        include($_SERVER["DOCUMENT_ROOT"] . "/assets/php/otros/con.php");
+        include($_SERVER["DOCUMENT_ROOT"] . "/2cnytm029mp3r/cm293uc5904uh.php");
         $this->con = $con;
     }
 
