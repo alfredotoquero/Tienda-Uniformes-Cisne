@@ -132,7 +132,7 @@ Version: 3.4.8 Timestamp: Thu May  1 09:50:32 EDT 2014
     width: 100%;
     margin-top: -1px;
     position: absolute;
-    z-index: 9999;
+    z-index: 999999;
     top: 100%;
 
     background: #fff;

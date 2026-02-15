@@ -11,6 +11,7 @@ if($pedidos["result"]=="success"){
         <thead>
             <tr>
                 <th># Pedido</th>
+                <th>Facturado</th>
                 <th>Total</th>
                 <th>Abonado</th>
                 <th>Restante</th>
@@ -24,11 +25,16 @@ if($pedidos["result"]=="success"){
             ?>
             <tr>
                 <td><?= $tmp["idpedido"] ?></td>
+                <td class="text-center">
+                    <? if(!empty($tmp["idfactura"])){ ?>
+                    <i class="fa fa-check text-success"></i>
+                    <? } ?>
+                </td>
                 <td>$<?= number_format($tmp["total"],2) ?></td>
                 <td>$<?= number_format($tmp["abonado"],2) ?></td>
                 <td>$<? echo number_format($tmp["total"] - $tmp["abonado"], 2); ?></td>
                 <td>
-                    <input type="text" name="txtPago[<?= $tmp["idpedido"] ?>]" class="form-control txtPago" data-maximo="<?= $tmp["total"] - $tmp["abonado"] ?>">
+                    <input type="text" name="txtPago[<?= $tmp["idpedido"] ?>]" class="form-control txtPago" data-maximo="<?= $tmp["total"] - $tmp["abonado"] ?>" data-idfactura="<?= $tmp["idfactura"] ?>">
                 </td>
                 <td><? echo $p->fecha_formateada($tmp["fecha"],false); ?></td>
             </tr>
@@ -38,7 +44,7 @@ if($pedidos["result"]=="success"){
         </tbody>
         <tfoot>
             <tr>
-                <th class="text-right" colspan="4">Pago recibido</th>
+                <th class="text-right" colspan="5">Pago recibido</th>
                 <td id="totalPago" colspan="2">$0.00</td>
             </tr>
         </tfoot>

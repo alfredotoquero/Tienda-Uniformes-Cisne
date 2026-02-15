@@ -178,6 +178,7 @@ function fecha_formateada2($fecha)
 
 	<!-- Datepicker and Wickedpicker JS -->
 	<script src="libs/bootstrap-datepicker/dist/js/bootstrap-datepicker.min.js"></script>
+	<script src="assets/plugins/bootstrap-datepicker/dist/locales/bootstrap-datepicker.es.min.js"></script>
 	<script src="assets/plugins/bootstrap-daterangepicker/daterangepicker.js"></script>
 	<script src="libs/wickedpicker/dist/wickedpicker.min.js"></script>
 	<script src="assets/plugins/select2/dist/js/select2.min.js" type="text/javascript"></script>

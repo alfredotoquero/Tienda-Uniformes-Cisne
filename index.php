@@ -1,9 +1,5 @@
 <?
-ini_set("session.gc_maxlifetime","7200");
-ini_set('session.cookie_domain', 'tienda.uniformescisne.mx');
-session_name("v3nd3d0rpl4y3r4spvc1sn3");
-session_start();
-
+include("vm39845um223u/c91ktn24g7if5u.php");
 include("2cnytm029mp3r/cm293uc5904uh.php");
 
 if($_POST["accion"]=="login"){
