@@ -40,3 +40,39 @@
     </div>
 </div>
 </div>
+<script>
+$(document).ready(function(){
+    // Inicializar datepickers
+    $("#txtFechaInicial").datepicker({
+        format: "yyyy-mm-dd",
+        autoclose: true,
+        todayHighlight: true,
+        language: "es"
+    }).on("changeDate", function(e){
+        // Cuando cambia la fecha inicial, actualizar la fecha mínima del datepicker final
+        $("#txtFechaFinal").datepicker("setStartDate", e.date);
+    });
+
+    $("#txtFechaFinal").datepicker({
+        format: "yyyy-mm-dd",
+        autoclose: true,
+        todayHighlight: true,
+        language: "es"
+    }).on("changeDate", function(e){
+        // Cuando cambia la fecha final, actualizar la fecha máxima del datepicker inicial
+        $("#txtFechaInicial").datepicker("setEndDate", e.date);
+    });
+
+    // Validación adicional en el submit del formulario
+    $(".formBusqueda").on("submit", function(e){
+        var fechaInicial = new Date($("#txtFechaInicial").val());
+        var fechaFinal = new Date($("#txtFechaFinal").val());
+
+        if(fechaFinal < fechaInicial){
+            e.preventDefault();
+            alert("La fecha final no puede ser menor a la fecha inicial");
+            return false;
+        }
+    });
+});
+</script>
