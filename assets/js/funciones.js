@@ -63,7 +63,7 @@ function filtrarPedidosPago(idvendedor){
     );
 }
 
-function verXML_Pago(idpago){
+function descargarXML_Pago(idpago){
     $.ajax({
         url: "/assets/php/controladores/pagos.php",
         method: "POST",

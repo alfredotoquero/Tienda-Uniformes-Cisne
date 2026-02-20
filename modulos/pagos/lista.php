@@ -44,8 +44,8 @@ if($pagos["result"]=="success"){
                                 <a class="dropdown-item" href="#" onclick="verPDF_Pago(<?= $pago['idpago'] ?>)">
                                     <i class="fa fa-file-pdf-o"></i> Ver PDF
                                 </a>
-                                <a class="dropdown-item" href="#" onclick="verXML_Pago(<?= $pago['idpago'] ?>)">
-                                    <i class="fa fa-file-code-o"></i> Ver XML
+                                <a class="dropdown-item" href="#" onclick="descargarXML_Pago(<?= $pago['idpago'] ?>)">
+                                    <i class="fa fa-file-code-o"></i> Descargar XML
                                 </a>
                                 <a class="dropdown-item" href="#" onclick="descargarPago(<?= $pago['idpago'] ?>)">
                                     <i class="fa fa-download"></i> Descargar pago
