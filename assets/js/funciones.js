@@ -113,14 +113,13 @@ function descargarPago(idpago){
                 const zip = new JSZip();
                 zip.file(res.uuid + ".xml", res.xml, { base64: true });
                 zip.file(res.uuid + ".pdf", res.pdf, { base64: true });
-                zip.generateAsync({ type: "blob" }).then(function(blob) {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = res.uuid + ".zip";
-                    a.click();
-                    URL.revokeObjectURL(url);
-                });
+                const blob = zip.generate({ type: "blob" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = res.uuid + ".zip";
+                a.click();
+                URL.revokeObjectURL(url);
             } else {
                 Swal.fire({
                     type: "error",
