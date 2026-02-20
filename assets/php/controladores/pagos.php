@@ -20,6 +20,9 @@ try{
         case "verPDF":
             $respuesta = $clasePagos->verPDF($_POST);
         break;
+        case "verXML":
+            $respuesta = $clasePagos->verXML($_POST);
+        break;
         default: $respuesta = $arrayerror; break;
     }
     

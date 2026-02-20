@@ -1015,7 +1015,8 @@ class Pagos{
 
             $respuesta = array(
                 "success" => true,
-                "xml" => base64_encode(file_get_contents($ruta))
+                "xml" => base64_encode(file_get_contents($ruta)),
+                "uuid" => $pago["uuid"]
             );
         }catch(Exception $e){
             $respuesta = array(
