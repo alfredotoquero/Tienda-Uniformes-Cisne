@@ -189,6 +189,7 @@ function fecha_formateada2($fecha)
 
 	<!-- Optional: include a polyfill for ES6 Promises for IE11 and Android browser -->
 	<script src="assets/js/sweetalert2.all.min.js"></script>
+	<script src="assets/plugins/datatables/jszip.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/promise-polyfill"></script>
 	<!--  -->
 

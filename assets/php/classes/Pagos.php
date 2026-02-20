@@ -983,6 +983,55 @@ class Pagos{
         }
     }
 
+    public function descargarPago($post){
+        try{
+            $idpago = mysqli_real_escape_string($this->con,$post["idpago"]);
+
+            $query = "
+            select
+                a.uuid,
+                b.rfc as emisor_rfc
+            from
+                tpagos a
+            left join
+                temisores b
+            on
+                b.idemisor = a.idemisor
+            where
+                a.idpago = '".$idpago."'";
+            $result = mysqli_query($this->con,$query);
+
+            if(mysqli_num_rows($result)==0){
+                throw new Exception("No se encontró información del pago");
+            }
+
+            $pago = mysqli_fetch_assoc($result);
+            $ruta_base = $_SERVER["DOCUMENT_ROOT"]."/../1.uniformescisne.mx/emisores/".$pago["emisor_rfc"]."/pagos/".$pago["uuid"];
+
+            if(!file_exists($ruta_base.".xml")){
+                throw new Exception("No se encontró el archivo XML del pago");
+            }
+
+            if(!file_exists($ruta_base.".pdf")){
+                throw new Exception("No se encontró el archivo PDF del pago");
+            }
+
+            $respuesta = array(
+                "success" => true,
+                "uuid" => $pago["uuid"],
+                "xml" => base64_encode(file_get_contents($ruta_base.".xml")),
+                "pdf" => base64_encode(file_get_contents($ruta_base.".pdf"))
+            );
+        }catch(Exception $e){
+            $respuesta = array(
+                "success" => false,
+                "message" => $e->getMessage()
+            );
+        }finally{
+            return $respuesta;
+        }
+    }
+
     public function verXML($post){
         try{
             $idpago = mysqli_real_escape_string($this->con,$post["idpago"]);

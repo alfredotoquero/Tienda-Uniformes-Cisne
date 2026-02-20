@@ -23,6 +23,9 @@ try{
         case "verXML":
             $respuesta = $clasePagos->verXML($_POST);
         break;
+        case "descargarPago":
+            $respuesta = $clasePagos->descargarPago($_POST);
+        break;
         default: $respuesta = $arrayerror; break;
     }
     
