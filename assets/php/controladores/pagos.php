@@ -17,6 +17,9 @@ try{
         case "agregarPago":
             $respuesta = $clasePagos->agregarPago($_POST);
         break;
+        case "verPDF":
+            $respuesta = $clasePagos->verPDF($_POST);
+        break;
         default: $respuesta = $arrayerror; break;
     }
     

@@ -939,5 +939,93 @@ class Pagos{
         return $contenido;
     }
 
+    public function verPDF($post){
+        try{
+            $idpago = mysqli_real_escape_string($this->con,$post["idpago"]);
+
+            $query = "
+            select
+                a.uuid,
+                b.rfc as emisor_rfc
+            from
+                tpagos a
+            left join
+            	temisores b
+            on
+            	b.idemisor = a.idemisor
+            where
+                a.idpago = '".$idpago."'";
+            $result = mysqli_query($this->con,$query);
+
+            if(mysqli_num_rows($result)==0){
+                throw new Exception("No se encontró información del pago");
+            }
+
+            $pago = mysqli_fetch_assoc($result);
+
+            $ruta = $_SERVER["DOCUMENT_ROOT"]."/../1.uniformescisne.mx/emisores/".$pago["emisor_rfc"]."/pagos/".$pago["uuid"].".pdf";
+
+            if(!file_exists($ruta)){
+                throw new Exception("No se encontró el archivo seleccionado");
+            }
+
+            $respuesta = array(
+                "success" => true,
+                "pdf" => base64_encode(file_get_contents($ruta))
+            );
+        }catch(Exception $e){
+            $respuesta = array(
+                "success" => false,
+                "message" => $e->getMessage()
+            );
+        }finally{
+            return $respuesta;
+        }
+    }
+
+    public function verXML($post){
+        try{
+            $idpago = mysqli_real_escape_string($this->con,$post["idpago"]);
+
+            $query = "
+            select
+                a.uuid,
+                b.rfc as emisor_rfc
+            from
+                tpagos a
+            left join
+            	temisores b
+            on
+            	b.idemisor = a.idemisor
+            where
+                a.idpago = '".$idpago."'";
+            $result = mysqli_query($this->con,$query);
+
+            if(mysqli_num_rows($result)==0){
+                throw new Exception("No se encontró información del pago");
+            }
+
+            $pago = mysqli_fetch_assoc($result);
+
+            $ruta = $_SERVER["DOCUMENT_ROOT"]."/../1.uniformescisne.mx/emisores/".$pago["emisor_rfc"]."/pagos/".$pago["uuid"].".xml";
+
+            if(!file_exists($ruta)){
+                throw new Exception("No se encontró el archivo seleccionado");
+            }
+
+            $respuesta = array(
+                "success" => true,
+                "xml" => base64_encode(file_get_contents($ruta))
+            );
+        }catch(Exception $e){
+            $respuesta = array(
+                "success" => false,
+                "message" => $e->getMessage()
+            );
+        }finally{
+            return $respuesta;
+        }
+    }
+
 }
 ?>

@@ -41,10 +41,10 @@ if($pagos["result"]=="success"){
                         </button>
                         <div class="dropdown-menu dropdown-menu-right">
                             <?php if(!empty($pago["uuid"])): ?>
-                                <a class="dropdown-item" href="#" onclick="verPDF(<?= $pago['idpago'] ?>)">
+                                <a class="dropdown-item" href="#" onclick="verPDF_Pago(<?= $pago['idpago'] ?>)">
                                     <i class="fa fa-file-pdf-o"></i> Ver PDF
                                 </a>
-                                <a class="dropdown-item" href="#" onclick="verXML(<?= $pago['idpago'] ?>)">
+                                <a class="dropdown-item" href="#" onclick="verXML_Pago(<?= $pago['idpago'] ?>)">
                                     <i class="fa fa-file-code-o"></i> Ver XML
                                 </a>
                                 <a class="dropdown-item" href="#" onclick="descargarPago(<?= $pago['idpago'] ?>)">
