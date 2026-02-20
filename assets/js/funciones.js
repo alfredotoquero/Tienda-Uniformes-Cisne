@@ -63,6 +63,42 @@ function filtrarPedidosPago(idvendedor){
     );
 }
 
+function verXML_Pago(idpago){
+    $.ajax({
+        url: "/assets/php/controladores/pagos.php",
+        method: "POST",
+        data: {
+            proceso: "verXML",
+            idpago: idpago
+        },
+        dataType: "json",
+        success: function(res) {
+            if (res.success) {
+                const blob = new Blob([atob(res.xml)], { type: "application/xml" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = res.uuid + ".xml";
+                a.click();
+                URL.revokeObjectURL(url);
+            } else {
+                Swal.fire({
+                    type: "error",
+                    title: "Error",
+                    text: res.message
+                });
+            }
+        },
+        error: function() {
+            Swal.fire({
+                type: "error",
+                title: "Error",
+                text: "No se pudo conectar con el servidor"
+            });
+        }
+    });
+}
+
 function verPDF_Pago(idpago){
     $.ajax({
         url: "/assets/php/controladores/pagos.php",
