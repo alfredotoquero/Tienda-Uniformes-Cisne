@@ -99,6 +99,46 @@ function descargarXML_Pago(idpago){
     });
 }
 
+function descargarPago(idpago){
+    $.ajax({
+        url: "/assets/php/controladores/pagos.php",
+        method: "POST",
+        data: {
+            proceso: "descargarPago",
+            idpago: idpago
+        },
+        dataType: "json",
+        success: function(res) {
+            if (res.success) {
+                const zip = new JSZip();
+                zip.file(res.uuid + ".xml", res.xml, { base64: true });
+                zip.file(res.uuid + ".pdf", res.pdf, { base64: true });
+                zip.generateAsync({ type: "blob" }).then(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = res.uuid + ".zip";
+                    a.click();
+                    URL.revokeObjectURL(url);
+                });
+            } else {
+                Swal.fire({
+                    type: "error",
+                    title: "Error",
+                    text: res.message
+                });
+            }
+        },
+        error: function() {
+            Swal.fire({
+                type: "error",
+                title: "Error",
+                text: "No se pudo conectar con el servidor"
+            });
+        }
+    });
+}
+
 function verPDF_Pago(idpago){
     $.ajax({
         url: "/assets/php/controladores/pagos.php",
