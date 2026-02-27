@@ -26,6 +26,9 @@ try{
         case "descargarPago":
             $respuesta = $clasePagos->descargarPago($_POST);
         break;
+        case "generarComplementoPago":
+            $respuesta = $clasePagos->generarComplementoPago($_POST);
+        break;
         default: $respuesta = $arrayerror; break;
     }
     

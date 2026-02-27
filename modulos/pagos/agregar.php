@@ -206,7 +206,8 @@ function registrarPago() {
             idformapago: formaPago,
             fecha: fecha,
             pedidos: pedidos,
-            complemento: complemento
+            complemento: complemento,
+            total: montoTotal
         };
 
         // Enviar al backend

@@ -219,6 +219,37 @@ class Pagos{
             $idformapago = mysqli_real_escape_string($this->con,$post["idformapago"]);
             $fecha = mysqli_real_escape_string($this->con,$post["fecha"]);
             $complemento = mysqli_real_escape_string($this->con,$post["complemento"]);
+            $total = mysqli_real_escape_string($this->con,$post["total"]);
+
+            // Iniciar transacción
+            mysqli_begin_transaction($this->con);
+
+            // Insertar registro en tpagos sin serie, folio, uuid ni timbrado
+            $idusuario = $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"];
+            $query = "
+            insert
+            into
+                tpagos
+            (
+                idusuario,
+                idcliente,
+                total,
+                idformapago,
+                fecha,
+                status
+            ) values (
+                '".$idusuario."',
+                '".$idcliente."',
+                '".$total."',
+                '".$idformapago."',
+                '".$fecha."',
+                1
+            )";
+
+            if(!mysqli_query($this->con, $query)){
+                throw new Exception("Error al insertar el registro de pago");
+            }
+            $idpago = mysqli_insert_id($this->con);
 
             $pedidos = [];
             if(isset($post["pedidos"]) && is_array($post["pedidos"])){
@@ -238,228 +269,236 @@ class Pagos{
                 throw new Exception("No se recibieron pedidos con monto mayor a 0");
             }
 
-            // // Obtener datos del vendedor
-            // $idvendedor = $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"];
-            // $query = "
-            // select
-            //     *
-            // from
-            //     tvendedores
-            // where
-            //     idvendedor = '".$idvendedor."'";
-            // $vendedor = mysqli_fetch_assoc(mysqli_query($this->con,$query));
+            // Obtener datos del vendedor
+            $idvendedor = $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"];
+            $query = "
+            select
+                *
+            from
+                tvendedores
+            where
+                idvendedor = '".$idvendedor."'";
+            $vendedor = mysqli_fetch_assoc(mysqli_query($this->con,$query));
 
-            // if(empty($vendedor)){
-            //     throw new Exception("No se pudo recuperar la información del vendedor");
-            // }
+            if(empty($vendedor)){
+                throw new Exception("No se pudo recuperar la información del vendedor");
+            }
 
-            // // Obtener corte activo
-            // $query = "
-            // select
-            //     *
-            // from
-            //     tcortessucursales
-            // where
-            //     idsucursal = '".$vendedor["idsucursal"]."' and
-            //     status = 'A'";
-            // $corte = mysqli_fetch_assoc(mysqli_query($this->con,$query));
+            // Obtener corte activo
+            $query = "
+            select
+                *
+            from
+                tcortessucursales
+            where
+                idsucursal = '".$vendedor["idsucursal"]."' and
+                status = 'A'";
+            $corte = mysqli_fetch_assoc(mysqli_query($this->con,$query));
 
-            // if(empty($corte)){
-            //     throw new Exception("No hay un corte activo para la sucursal");
-            // }
+            if(empty($corte)){
+                throw new Exception("No hay un corte activo para la sucursal");
+            }
 
-            // // Iniciar transacción
-            // mysqli_begin_transaction($this->con);
+            // Procesar cada pedido
+            $tickets = [];
+            foreach($pedidos as $pedido){
+                $idpedido = $pedido["idpedido"];
+                $monto = $pedido["monto"];
 
-            // // Procesar cada pedido
-            // $tickets = [];
-            // foreach($pedidos as $pedido){
-            //     $idpedido = $pedido["idpedido"];
-            //     $monto = $pedido["monto"];
+                // Obtener folio actual
+                $query = "
+                select
+                    *
+                from
+                    tsucursales
+                where
+                    idsucursal = '".$vendedor["idsucursal"]."'";
+                $folio = mysqli_fetch_assoc(mysqli_query($this->con,$query))["folio"];
 
-            //     // Obtener folio actual
-            //     $query = "
-            //     select
-            //         *
-            //     from
-            //         tsucursales
-            //     where
-            //         idsucursal = '".$vendedor["idsucursal"]."'";
-            //     $folio = mysqli_fetch_assoc(mysqli_query($this->con,$query))["folio"];
+                // Insertar ticket
+                $query = "
+                insert
+                into
+                    ttickets
+                (
+                    idpedido,
+                    idsucursal,
+                    idcorte,
+                    idvendedor,
+                    folio,
+                    total,
+                    fecha,
+                    status,
+                    notas
+                ) values (
+                    '".$idpedido."',
+                    '".$vendedor["idsucursal"]."',
+                    '".$corte["idcorte"]."',
+                    '".$vendedor["idvendedor"]."',
+                    '".$folio."',
+                    '".$monto."',
+                    '".$fecha."',
+                    'A',
+                    ''
+                )";
+                if(!mysqli_query($this->con,$query)){
+                    throw new Exception("Error al insertar ticket para el pedido ".$idpedido);
+                }
 
-            //     // Insertar ticket
-            //     $query = "
-            //     insert
-            //     into
-            //         ttickets
-            //     (
-            //         idpedido,
-            //         idsucursal,
-            //         idcorte,
-            //         idvendedor,
-            //         folio,
-            //         total,
-            //         fecha,
-            //         status,
-            //         notas
-            //     ) values (
-            //         '".$idpedido."',
-            //         '".$vendedor["idsucursal"]."',
-            //         '".$corte["idcorte"]."',
-            //         '".$vendedor["idvendedor"]."',
-            //         '".$folio."',
-            //         '".$monto."',
-            //         '".$fecha."',
-            //         'A',
-            //         ''
-            //     )";
-            //     if(!mysqli_query($this->con,$query)){
-            //         throw new Exception("Error al insertar ticket para el pedido ".$idpedido);
-            //     }
+                $idticket = mysqli_insert_id($this->con);
 
-            //     $idticket = mysqli_insert_id($this->con);
+                // Incrementar folio
+                $query = "
+                update
+                    tsucursales
+                set
+                    folio = folio + 1
+                where
+                    idsucursal = '".$vendedor["idsucursal"]."'";
+                mysqli_query($this->con,$query);
 
-            //     // Incrementar folio
-            //     $query = "
-            //     update
-            //         tsucursales
-            //     set
-            //         folio = folio + 1
-            //     where
-            //         idsucursal = '".$vendedor["idsucursal"]."'";
-            //     mysqli_query($this->con,$query);
+                // Insertar en tformaspagoticket
+                $query = "
+                insert
+                into
+                    tformaspagoticket
+                (
+                    idticket,
+                    idvendedor,
+                    idformapago,
+                    monto,
+                    montorecibido
+                ) values (
+                    '".$idticket."',
+                    '".$vendedor["idvendedor"]."',
+                    '".$idformapago."',
+                    '".$monto."',
+                    '".$monto."'
+                )";
+                if(!mysqli_query($this->con,$query)){
+                    throw new Exception("Error al registrar la forma de pago del ticket para el pedido ".$idpedido);
+                }
 
-            //     // Insertar en tformaspagoticket
-            //     $query = "
-            //     insert
-            //     into
-            //         tformaspagoticket
-            //     (
-            //         idticket,
-            //         idvendedor,
-            //         idformapago,
-            //         monto,
-            //         montorecibido
-            //     ) values (
-            //         '".$idticket."',
-            //         '".$vendedor["idvendedor"]."',
-            //         '".$idformapago."',
-            //         '".$monto."',
-            //         '".$monto."'
-            //     )";
-            //     mysqli_query($this->con,$query);
+                // Insertar en tformaspagopedido
+                $query = "
+                insert
+                into
+                    tformaspagopedido
+                (
+                    idpedido,
+                    idpago,
+                    idvendedor,
+                    idformapago,
+                    monto,
+                    montorecibido,
+                    fecha
+                ) values (
+                    '".$idpedido."',
+                    '".$idpago."',
+                    '".$vendedor["idvendedor"]."',
+                    '".$idformapago."',
+                    '".$monto."',
+                    '".$monto."',
+                    '".$fecha."'
+                )";
+                if(!mysqli_query($this->con,$query)){
+                    throw new Exception("Error al registrar la forma de pago del pedido ".$idpedido);
+                }
 
-            //     // Insertar en tformaspagopedido
-            //     $query = "
-            //     insert
-            //     into
-            //         tformaspagopedido
-            //     (
-            //         idpedido,
-            //         idvendedor,
-            //         idformapago,
-            //         monto,
-            //         montorecibido,
-            //         fecha
-            //     ) values (
-            //         '".$idpedido."',
-            //         '".$vendedor["idvendedor"]."',
-            //         '".$idformapago."',
-            //         '".$monto."',
-            //         '".$monto."',
-            //         '".$fecha."'
-            //     )";
-            //     mysqli_query($this->con,$query);
+                // Actualizar abonado en tpedidos
+                $query = "
+                update
+                    tpedidos
+                set
+                    abonado = abonado + ".$monto."
+                where
+                    idpedido = '".$idpedido."'";
+                if(!mysqli_query($this->con,$query)){
+                    throw new Exception("Error al actualizar el abonado del pedido ".$idpedido);
+                }
 
-            //     // Actualizar abonado en tpedidos
-            //     $query = "
-            //     update
-            //         tpedidos
-            //     set
-            //         abonado = abonado + ".$monto."
-            //     where
-            //         idpedido = '".$idpedido."'";
-            //     mysqli_query($this->con,$query);
+                // Activar pedido si pendiente=0
+                $query = "
+                select
+                    *
+                from
+                    tpedidos
+                where
+                    pendiente = 0 and
+                    idpedido = '".$idpedido."'";
+                if(mysqli_num_rows(mysqli_query($this->con,$query)) > 0){
+                    $query = "
+                    update
+                        tpedidos
+                    set
+                        pendiente = 1
+                    where
+                        idpedido = '".$idpedido."'";
+                    if(!mysqli_query($this->con,$query)){
+                        throw new Exception("Error al activar el pedido ".$idpedido);
+                    }
+                }
 
-            //     // Activar pedido si pendiente=0
-            //     $query = "
-            //     select
-            //         *
-            //     from
-            //         tpedidos
-            //     where
-            //         pendiente = 0 and
-            //         idpedido = '".$idpedido."'";
-            //     if(mysqli_num_rows(mysqli_query($this->con,$query)) > 0){
-            //         $query = "
-            //         update
-            //             tpedidos
-            //         set
-            //             pendiente = 1
-            //         where
-            //             idpedido = '".$idpedido."'";
-            //         mysqli_query($this->con,$query);
-            //     }
+                // Si total == abonado, marcar como pagado
+                $copiasticket = 2;
+                $query = "
+                select
+                    *
+                from
+                    tpedidos
+                where
+                    idpedido = '".$idpedido."' and
+                    total = abonado";
+                if(mysqli_num_rows(mysqli_query($this->con,$query)) > 0){
+                    $query = "
+                    update
+                        tpedidos
+                    set
+                        statuspago = 1
+                    where
+                        idpedido = '".$idpedido."'";
+                    if(!mysqli_query($this->con,$query)){
+                        throw new Exception("Error al marcar como pagado el pedido ".$idpedido);
+                    }
+                    $copiasticket = 1;
+                }
 
-            //     // Si total == abonado, marcar como pagado
-            //     $copiasticket = 2;
-            //     $query = "
-            //     select
-            //         *
-            //     from
-            //         tpedidos
-            //     where
-            //         idpedido = '".$idpedido."' and
-            //         total = abonado";
-            //     if(mysqli_num_rows(mysqli_query($this->con,$query)) > 0){
-            //         $query = "
-            //         update
-            //             tpedidos
-            //         set
-            //             statuspago = 1
-            //         where
-            //             idpedido = '".$idpedido."'";
-            //         mysqli_query($this->con,$query);
-            //         $copiasticket = 1;
-            //     }
+                // Insertar en tticketspedidos
+                $query = "
+                insert
+                into
+                    tticketspedidos
+                (
+                    idvendedor,
+                    idpedido,
+                    total,
+                    fecha,
+                    status
+                ) values (
+                    '".$vendedor["idvendedor"]."',
+                    '".$idpedido."',
+                    '".$monto."',
+                    '".$fecha."',
+                    'A'
+                )";
+                if(!mysqli_query($this->con,$query)){
+                    throw new Exception("Error al registrar el ticket del pedido ".$idpedido);
+                }
 
-            //     // Insertar en tticketspedidos
-            //     $query = "
-            //     insert
-            //     into
-            //         tticketspedidos
-            //     (
-            //         idvendedor,
-            //         idpedido,
-            //         total,
-            //         fecha,
-            //         status
-            //     ) values (
-            //         '".$vendedor["idvendedor"]."',
-            //         '".$idpedido."',
-            //         '".$monto."',
-            //         '".$fecha."',
-            //         'A'
-            //     )";
-            //     mysqli_query($this->con,$query);
+                $tickets[] = array(
+                    "idticket" => $idticket,
+                    "copias" => $copiasticket
+                );
+            }
 
-            //     $tickets[] = array(
-            //         "idticket" => $idticket,
-            //         "copias" => $copiasticket
-            //     );
-            // }
-
-            // // Confirmar transacción
-            // mysqli_commit($this->con);
+            // Confirmar transacción
+            mysqli_commit($this->con);
 
             // Inician los preparativos para generar el complemento de pago en caso de que se requiera complemento
             if($complemento==1){
                 // Mandamos llamar la función para generar complemento de pago
                 $resultadoComplemento = $this->generarComplementoPago(array(
-                    "idcliente" => $idcliente,
-                    "idformapago" => $idformapago,
-                    "fecha" => $fecha,
-                    "facturas" => $pedidos
+                    "idpago" => $idpago
                 ));
             }
 
@@ -472,12 +511,12 @@ class Pagos{
             $respuesta = array(
                 "success" => true,
                 "message" => $mensaje,
-                // "tickets" => $tickets
+                "tickets" => $tickets
             );
 
         }catch(Exception $e){
             // Revertir todos los cambios si algo falló
-            // mysqli_rollback($this->con);
+            mysqli_rollback($this->con);
 
             $respuesta = array(
                 "success" => false,
@@ -490,13 +529,57 @@ class Pagos{
 
     public function generarComplementoPago($post){
         try{
-            $idcliente = mysqli_real_escape_string($this->con, $post["idcliente"]);
-            $idformapago = mysqli_real_escape_string($this->con, $post["idformapago"]);
-            $fecha = mysqli_real_escape_string($this->con, $post["fecha"]);
+            $idpago = mysqli_real_escape_string($this->con, $post["idpago"]);
+
+            // Recuperamos la información principal del pago
+            $query = "
+            select
+                idcliente,
+                idformapago,
+                fecha
+            from
+                tpagos
+            where
+                idpago = '".$idpago."'";
+            $result = mysqli_query($this->con,$query);
+
+            if(mysqli_num_rows($result)==0){
+                throw new Exception("No se pudo recuperar la información del pago");
+            }
+
+            $pago = mysqli_fetch_assoc($result);
+
+            $idcliente = $pago["idcliente"];
+            $idformapago = $pago["idformapago"];
+            $fecha = substr($pago["fecha"], 0, 10);
+
+            // Obtenemos la información de los pagos que se realizaron
+            $query = "
+            select
+                a.idpedido,
+                b.idfactura,
+                a.monto
+            from
+                tformaspagopedido a
+            left join
+                tpedidos b
+            on
+                b.idpedido = a.idpedido
+            where
+                a.idpago = '".$idpago."' and
+                b.idfactura is not null and
+                b.idfactura > 0";
+            $result = mysqli_query($this->con,$query);
+
+            if(mysqli_num_rows($result)==0){
+                throw new Exception("No se pudo recuperar la información de los pagos");
+            }
+
+            $pedidos = mysqli_fetch_all($result,MYSQLI_ASSOC);
 
             $facturas = [];
-            if(isset($post["facturas"]) && is_array($post["facturas"])){
-                foreach($post["facturas"] as $factura){
+            if(isset($pedidos) && is_array($pedidos)){
+                foreach($pedidos as $factura){
                     $idfactura = mysqli_real_escape_string($this->con, $factura["idfactura"]);
                     $monto = floatval($factura["monto"]);
 
@@ -514,7 +597,8 @@ class Pagos{
                         	from
                         		tformaspagopedido
                         	where
-                        		idpedido = b.idpedido
+                        		idpedido = b.idpedido and
+                                idpago < '".$idpago."'
                         ) + 1 as parcialidad,
                         round((a.iva/a.subtotal)*100,0) as impuesto,
                         b.idtienda
@@ -572,35 +656,19 @@ class Pagos{
             // Calcular total del pago
             $total = array_sum(array_column($facturas, "monto"));
 
-            // Insertar registro en tpagos sin serie, folio, uuid ni timbrado
-            $idusuario = $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"];
+            // Actualizar registro en tpagos con emisor y razon social
             $query = "
-            insert
-            into
+            update
                 tpagos
-            (
-                idusuario,
-                idemisor,
-                idcliente,
-                idrazonsocial,
-                total,
-                idformapago,
-                fecha,
-                status
-            ) values (
-                '".$idusuario."',
-                '".$idemisor."',
-                '".$idcliente."',
-                '".$idrazonsocial."',
-                '".$total."',
-                '".$idformapago."',
-                '".$fecha."',
-                1
-            )";
+            set
+                idemisor = '".$idemisor."',
+                idrazonsocial = '".$idrazonsocial."'
+            where
+                idpago = '".$idpago."'";
+
             if(!mysqli_query($this->con, $query)){
-                throw new Exception("Error al insertar el registro de pago");
+                throw new Exception("Error al actualizar el registro de pago");
             }
-            $idpago = mysqli_insert_id($this->con);
 
             // Obtener régimen fiscal del emisor
             $query = "
@@ -720,8 +788,16 @@ class Pagos{
             ));
 
             $response = curl_exec($curl);
+
+            if($response === false){
+                throw new Exception("Error de conexión con el timbrador: " . curl_error($curl));
+            }
+
             $response = json_decode($response, true);
-            curl_close($curl);
+
+            if($response === null){
+                throw new Exception("Respuesta inválida del timbrador");
+            }
 
             if ($response["response"] == true) {
                 // Timbrado exitoso: actualizar tpagos e incrementar folio en una transacción
@@ -748,7 +824,23 @@ class Pagos{
                     idemisor = '".$idemisor."'";
                 $ok2 = mysqli_query($this->con, $query);
 
-                if($ok1 && $ok2){
+                // Actualizar saldo en tfacturas por cada pago parcial
+                $ok3 = true;
+                foreach($facturas as $fac){
+                    $query = "
+                    update
+                        tfacturas
+                    set
+                        saldo = saldo - ".$fac["monto"]."
+                    where
+                        idfactura = '".$fac["idfactura"]."'";
+                    if(!mysqli_query($this->con, $query)){
+                        $ok3 = false;
+                        break;
+                    }
+                }
+
+                if($ok1 && $ok2 && $ok3){
                     mysqli_commit($this->con);
 
                     // Enviar complemento por correo
@@ -785,7 +877,7 @@ class Pagos{
                             "asunto" => "Envío de complemento de pago",
                             "mensaje" => $cuerpo,
                             "correos" => array(
-                                $correo
+                                $correoCliente
                             ),
                             "adjuntos" => array(
                                 array(
@@ -828,7 +920,7 @@ class Pagos{
 
         }catch(Exception $e){
             $respuesta = array(
-                "success" => true,
+                "success" => false,
                 "message" => $e->getMessage()
             );
         }finally{

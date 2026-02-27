@@ -138,6 +138,53 @@ function descargarPago(idpago){
     });
 }
 
+function timbrarPago(idpago){
+    Swal.fire({
+        title: "¿Timbrar complemento de pago?",
+        text: "Se generará y timbrará el complemento de pago ante el SAT.",
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Sí, timbrar",
+        cancelButtonText: "Cancelar"
+    }).then(function(result) {
+        if (!result.value) return;
+
+        $.ajax({
+            url: "/assets/php/controladores/pagos.php",
+            method: "POST",
+            data: {
+                proceso: "generarComplementoPago",
+                idpago: idpago
+            },
+            dataType: "json",
+            success: function(res) {
+                if (res.success) {
+                    Swal.fire({
+                        type: "success",
+                        title: "Timbrado exitoso",
+                        text: res.message
+                    }).then(function() {
+                        App.modulos.pagos();
+                    });
+                } else {
+                    Swal.fire({
+                        type: "error",
+                        title: "Error",
+                        text: res.message
+                    });
+                }
+            },
+            error: function() {
+                Swal.fire({
+                    type: "error",
+                    title: "Error",
+                    text: "No se pudo conectar con el servidor"
+                });
+            }
+        });
+    });
+}
+
 function verPDF_Pago(idpago){
     $.ajax({
         url: "/assets/php/controladores/pagos.php",
