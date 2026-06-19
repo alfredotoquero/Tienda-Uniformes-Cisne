@@ -200,6 +200,7 @@ function fecha_formateada2($fecha)
 
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/fancyapps/fancybox@3.5.2/dist/jquery.fancybox.min.css" />
 	<script src="https://cdn.jsdelivr.net/gh/fancyapps/fancybox@3.5.2/dist/jquery.fancybox.min.js"></script>
+	<style>.swal2-container { z-index: 999999 !important; }</style>
 
 	<!-- KNOB JS -->
 	<!--[if IE]>

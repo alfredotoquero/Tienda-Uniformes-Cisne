@@ -232,6 +232,9 @@ function imprimir(idcuenta) {
                                                 <a href="javascript:;" onClick="imprimirTicket(<? echo $ticket["idticket"]; ?>,0,<? echo $tipoimpresion; ?>)"><li class="dropdown-item">Imprimir</li></a>
                                                 <? if($tipocuenta!=""){ ?>
                                                 <a href="?modulo1=cortes&modulo2=detallev&modulo3=detallecuenta&idticket=<? echo $ticket["idticket"]; ?>&idcuenta=<? echo $ticket["idcuenta"]; ?>&idcorte=<? echo $_GET["idcorte"]; ?>"><li class="dropdown-item">Ver detalle</li></a>
+                                                <? if($tipocuenta!="" && !empty($ticket["idcuenta"]) && empty($ticket["idfactura"])){ ?>
+                                                <a href="javascript:;" data-fancybox data-type="ajax" data-src="/modulos/cortes/facturar.php?idticket=<? echo $ticket['idticket']; ?>"><li class="dropdown-item">Facturar</li></a>
+                                                <? } ?>
                                                 <a href="?modulo1=cortes&modulo2=devolucion&idcorte=<? echo $_GET["idcorte"]; ?>&idcuenta=<? echo $ticket["idcuenta"]; ?>&idticket=<? echo $ticket["idticket"]; ?>"><li class="dropdown-item">Devolución</li></a>
                                                 <? } ?>
                                             </ul>
