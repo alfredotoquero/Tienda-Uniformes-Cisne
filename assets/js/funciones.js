@@ -1,3 +1,5 @@
+var enviandoformulario = false;
+
 const App = {
 
     modulos: {
