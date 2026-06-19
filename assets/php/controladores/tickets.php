@@ -13,7 +13,7 @@ try{
     $idusuario = $_SESSION["usuario"]["idusuario"];
     $_POST["idusuario"] = $idusuario;
 
-    switch($_POST["proceso"]){
+    switch($_POST["accion"]){
         case "facturar":
             if($_POST["authToken"]==$_SESSION["authToken"]){
                 $respuesta = $claseTickets->facturarTicket($_POST);
