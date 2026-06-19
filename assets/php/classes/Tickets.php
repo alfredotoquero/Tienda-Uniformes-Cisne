@@ -46,7 +46,7 @@ class Tickets{
         }
     }
 
-    public function facturarPedido($post){
+    public function facturarTicket($post){
         try{
             $idticket = mysqli_real_escape_string($this->con,$post["idticket"]);
             $idusuario = mysqli_real_escape_string($this->con,$post["idusuario"]);
