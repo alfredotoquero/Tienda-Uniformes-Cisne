@@ -151,7 +151,7 @@ class Tickets{
 
                 $cadena_sin_acentos = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $cadena_utf8);
                 
-                $valor_unitario = $tmp["precio"];
+                $valor_unitario = $tmp["precio"]/$tmp["cantidad"];
 
                 $conceptos_factura[] = [
                     "Cantidad" => $tmp["cantidad"],
@@ -305,6 +305,7 @@ class Tickets{
                 include($ruta_server."/assets/plantillas/correo/envioFactura.php");
                 include($ruta_server."/assets/plantillas/correo/base.php");
 
+                include($ruta_server."/assets/php/clases/Correos.php");
                 $claseCorreos = new Correos();
 
                 $correos = array_filter(array_map('trim', explode(',', $correo)));
