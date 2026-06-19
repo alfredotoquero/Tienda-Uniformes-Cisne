@@ -10,8 +10,7 @@ $arrayerror = array(
 try{
     $claseTickets = new Tickets();
 
-    $idusuario = $_SESSION["usuario"]["idusuario"];
-    $_POST["idusuario"] = $idusuario;
+    $_POST["idusuario"] = $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"];
 
     switch($_POST["accion"]){
         case "facturar":
