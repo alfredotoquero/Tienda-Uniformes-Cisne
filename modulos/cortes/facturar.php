@@ -35,7 +35,7 @@ if(!empty($ticket["idtienda"])){
         <form id="formFacturar" name="formFacturar">
             <input type="hidden" name="controlador" id="controlador" value="tickets">
             <input type="hidden" name="accion" id="accion" value="facturar">
-            <input type="hidden" name="idusuario" id="idusuario" value="<?= $_SESSION["usuario"]["idusuario"] ?>">
+            <input type="hidden" name="idusuario" id="idusuario" value="<?= $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"] ?>">
             <input type="hidden" name="idticket" id="idticket" value="<?= $_GET["idticket"] ?>">
             <input type="hidden" name="authToken" value="<? echo $_SESSION["authToken"]; ?>">
             <div id="divNuevaRazonSocial">
