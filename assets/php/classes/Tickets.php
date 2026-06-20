@@ -248,6 +248,8 @@ class Tickets{
                 (
                     idusuario,
                     idemisor,
+                    razonsocial,
+                    rfc,
                     idmetodopago,
                     idformapago,
                     serie,
@@ -261,6 +263,8 @@ class Tickets{
                 ) values (
                     '".$idusuario."',
                     '".$idemisor."',
+                    '".$receptor["Nombre"]."',
+                    '".$receptor["Rfc"]."',
                     '".$idmetodopago."',
                     '".$idformapago."',
                     '".$serie."',
