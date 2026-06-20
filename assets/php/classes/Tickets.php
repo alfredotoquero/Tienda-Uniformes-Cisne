@@ -192,7 +192,7 @@ class Tickets{
             $datos = array(
                 "api_key" => "tek_npzimyh2ajjxpj3p3j2ofozt7c6deej9uu",
                 "Version" => "4.0",
-                "pruebas" => 1,
+                "pruebas" => 0,
                 "numero_certificado" => $numero_certificado,
                 "certificado" => $certificado,
                 "keypem" => $archivo_keypem,
@@ -305,7 +305,7 @@ class Tickets{
                 include($ruta_server."/assets/plantillas/correo/envioFactura.php");
                 include($ruta_server."/assets/plantillas/correo/base.php");
 
-                include($ruta_server."/assets/php/clases/Correos.php");
+                include($_SERVER["DOCUMENT_ROOT"]."/assets/php/classes/Correos.php");
                 $claseCorreos = new Correos();
 
                 $correos = array_filter(array_map('trim', explode(',', $correo)));

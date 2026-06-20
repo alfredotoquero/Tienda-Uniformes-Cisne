@@ -753,7 +753,7 @@ class Pagos{
                 "api_key" => "tek_npzimyh2ajjxpj3p3j2ofozt7c6deej9uu",
                 "Version" => "4.0",
                 "new" => 1,
-                "pruebas" => 1,
+                "pruebas" => 0,
                 "numero_certificado" => $numero_certificado,
                 "certificado" => $certificado,
                 "keypem" => $archivo_keypem,
@@ -868,6 +868,9 @@ class Pagos{
                         //Se envia la factura por correo
                         $folio = $infoEmisor["serie_pagos"]."-".$infoEmisor["folio_pagos"];
                         $fecha = date("Y-m-d");
+
+                        $logo = $ruta_server."/imagenes/tiendas/".$idtienda."_logo.png";
+                        $logo = "data:image/png;base64,".((file_exists($logo)) ? base64_encode(file_get_contents($logo)) : base64_encode(file_get_contents($ruta_server."/assets/images/logo-uniformes-trazo.png")));
 
                         include($ruta_server."/assets/plantillas/correo/envioComplemento.php");
                         include($ruta_server."/assets/plantillas/correo/base.php");
