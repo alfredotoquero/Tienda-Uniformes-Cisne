@@ -18,6 +18,14 @@ class Pagos{
         try{
             $fecha_i = mysqli_real_escape_string($this->con,$post["txtFechaInicial"]);
             $fecha_f = mysqli_real_escape_string($this->con,$post["txtFechaFinal"]);
+            $idusuario = mysqli_real_escape_string($this->con, $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"]);
+
+            $query = "select idsucursal from tvendedores where idvendedor = '".$idusuario."'";
+            $idsucursal = mysqli_fetch_assoc(mysqli_query($this->con,$query))["idsucursal"];
+
+            if(empty($idsucursal)){
+                throw new Exception("No se pudo recuperar la sucursal del vendedor");
+            }
 
             $query = "
             select
@@ -49,8 +57,13 @@ class Pagos{
                 tcatformaspago c
             on
                 a.idformapago = c.idformapago
+            join
+                tvendedores v
+            on
+                a.idusuario = v.idvendedor
             where
-                a.fecha between '".$fecha_i."' and '".$fecha_f."'
+                a.fecha between '".$fecha_i."' and '".$fecha_f."' and
+                v.idsucursal = '".$idsucursal."'
             order by
                 a.idpago desc";
             $result = mysqli_query($this->con,$query);
