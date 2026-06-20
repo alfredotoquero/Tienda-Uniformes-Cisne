@@ -869,6 +869,9 @@ class Pagos{
                         $folio = $infoEmisor["serie_pagos"]."-".$infoEmisor["folio_pagos"];
                         $fecha = date("Y-m-d");
 
+                        $logo = $ruta_server."/imagenes/tiendas/".$idtienda."_logo.png";
+                        $logo = "data:image/png;base64,".((file_exists($logo)) ? base64_encode(file_get_contents($logo)) : base64_encode(file_get_contents($ruta_server."/assets/images/logo-uniformes-trazo.png")));
+
                         include($ruta_server."/assets/plantillas/correo/envioComplemento.php");
                         include($ruta_server."/assets/plantillas/correo/base.php");
 

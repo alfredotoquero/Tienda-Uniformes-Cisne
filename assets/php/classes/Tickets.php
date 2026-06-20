@@ -305,7 +305,7 @@ class Tickets{
                 include($ruta_server."/assets/plantillas/correo/envioFactura.php");
                 include($ruta_server."/assets/plantillas/correo/base.php");
 
-                include($ruta_server."/assets/php/clases/Correos.php");
+                include($_SERVER["DOCUMENT_ROOT"]."/assets/php/classes/Correos.php");
                 $claseCorreos = new Correos();
 
                 $correos = array_filter(array_map('trim', explode(',', $correo)));
