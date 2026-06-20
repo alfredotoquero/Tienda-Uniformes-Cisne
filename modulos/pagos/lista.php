@@ -10,7 +10,6 @@ if($pagos["result"]=="success"){
     <table class="table table-hover table-sm">
         <thead>
             <tr>
-                <th># Pago</th>
                 <th>Cliente</th>
                 <th>Total</th>
                 <th>Forma de Pago</th>
@@ -24,7 +23,6 @@ if($pagos["result"]=="success"){
             foreach($pagos["pagos"] as $pago){
             ?>
             <tr>
-                <td><?= $pago["idpago"] ?></td>
                 <td><?= $pago["cliente"] ?></td>
                 <td>$<?= number_format($pago["total"],2) ?></td>
                 <td><?= $pago["formapago"] ?></td>
@@ -55,10 +53,12 @@ if($pagos["result"]=="success"){
                                     <i class="fa fa-times"></i> Cancelar
                                 </a>
                             <?php else: ?>
-                                <a class="dropdown-item" href="#" onclick="timbrarPago(<?= $pago['idpago'] ?>)">
-                                    <i class="fa fa-file-text"></i> Timbrar
-                                </a>
-                                <div class="dropdown-divider"></div>
+                                <?php if($pago["tiene_factura"]): ?>
+                                    <a class="dropdown-item" href="#" onclick="timbrarPago(<?= $pago['idpago'] ?>)">
+                                        <i class="fa fa-file-text"></i> Timbrar
+                                    </a>
+                                    <div class="dropdown-divider"></div>
+                                <?php endif; ?>
                                 <a class="dropdown-item text-danger" href="#" onclick="cancelarPago(<?= $pago['idpago'] ?>)">
                                     <i class="fa fa-times"></i> Cancelar
                                 </a>
