@@ -28,7 +28,17 @@ class Pagos{
                 a.idformapago,
                 c.nombre as formapago,
                 a.fecha,
-                a.uuid
+                a.uuid,
+                exists (
+                    select 1
+                    from tformaspagopedido fp
+                    join tpedidos p on p.idpedido = fp.idpedido
+                    join tfacturas f on f.idfactura = p.idfactura
+                    where fp.idpago = a.idpago
+                      and p.idfactura is not null
+                      and p.idfactura > 0
+                      and f.idmetodopago = 1
+                ) as tiene_factura
             from
                 tpagos a
             left join
