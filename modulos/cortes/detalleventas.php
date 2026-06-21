@@ -1,6 +1,8 @@
 <?
 unset($_SESSION["authToken"]);
 $_SESSION["authToken"]=sha1(uniqid(microtime(), true));
+
+include_once($_SERVER["DOCUMENT_ROOT"] . "/assets/php/classes/Tickets.php");
 ?>
 
 <script>
@@ -41,9 +43,9 @@ function imprimir(idcuenta) {
         <div class="box-body" id="listaCuentas">
             <div class="table-responsive">
                 <?
-                // $cuentas = mysqli_query($con,"select * from tcuentas where idcorte='".$_GET["idcorte"]."' order by idcuenta desc");
-                $tickets = mysqli_query($con,"select * from ttickets where idcorte='".$_GET["idcorte"]."' order by idticket desc");
-                if (mysqli_num_rows($tickets)>0) {
+                $claseTickets = new Tickets();
+                $resultado = $claseTickets->obtenerTicketsPorCorte(["idcorte" => $_GET["idcorte"]]);
+                if ($resultado["respuesta"] == "OK" && count($resultado["tickets"]) > 0) {
                     ?>
                     <table class="table table-striped b-t">
                         <thead>
@@ -54,12 +56,13 @@ function imprimir(idcuenta) {
                                 <th>Vendedor</th>
                                 <th>Total</th>
                                 <th>Fecha</th>
+                                <th>Factura</th>
                                 <th style="width:50px;"></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?
-                            while ($ticket = mysqli_fetch_assoc($tickets)) {
+                            foreach ($resultado["tickets"] as $ticket) {
                                 // desglose 
                                 $efectivo = mysqli_fetch_assoc(mysqli_query($con,"select sum(monto) as monto from tformaspagoticket where idticket='".$ticket["idticket"]."' and idformapago=1"))["monto"];
                                 $efectivousd = mysqli_fetch_assoc(mysqli_query($con,"select sum(monto) as monto from tformaspagoticket where idticket='".$ticket["idticket"]."' and idformapago=2"))["monto"];
@@ -225,6 +228,7 @@ function imprimir(idcuenta) {
                                     ?>
                                     </td>
                                     <td><? echo fecha_formateada($ticket["fecha"]); ?></td>
+                                    <td><? echo !empty($ticket["idfactura"]) ? $ticket["factura_serie"]."-".$ticket["factura_folio"] : "-"; ?></td>
                                     <td>
                                         <div class="btn-group dropdown">
                                             <button type="button" class="btn white" data-toggle="dropdown" aria-expanded="false">Opciones <span class="caret"></span></button>
@@ -236,6 +240,11 @@ function imprimir(idcuenta) {
                                                 <a href="javascript:;" data-fancybox data-type="ajax" data-src="/modulos/cortes/facturar.php?idticket=<? echo $ticket['idticket']; ?>"><li class="dropdown-item">Facturar</li></a>
                                                 <? } ?>
                                                 <a href="?modulo1=cortes&modulo2=devolucion&idcorte=<? echo $_GET["idcorte"]; ?>&idcuenta=<? echo $ticket["idcuenta"]; ?>&idticket=<? echo $ticket["idticket"]; ?>"><li class="dropdown-item">Devolución</li></a>
+                                                <? } ?>
+                                                <? if (!empty($ticket["idfactura"])) { ?>
+                                                <a href="javascript:;" onClick="solicitudServidor('facturas','verPDF','idfactura=<? echo $ticket['idfactura']; ?>','')"><li class="dropdown-item">Ver Factura</li></a>
+                                                <a href="/modulos/facturas/descargar.php?idfactura=<? echo $ticket['idfactura']; ?>"><li class="dropdown-item">Descargar Archivos</li></a>
+                                                <a href="javascript:;" data-fancybox data-type="ajax" data-src="/modulos/facturas/reenviar.php?idfactura=<? echo $ticket['idfactura']; ?>"><li class="dropdown-item">Reenviar Factura</li></a>
                                                 <? } ?>
                                             </ul>
                                         </div>
