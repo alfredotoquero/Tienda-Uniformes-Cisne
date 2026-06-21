@@ -780,6 +780,7 @@ class Pagos{
                 "numero_certificado" => $numero_certificado,
                 "certificado" => $certificado,
                 "keypem" => $archivo_keypem,
+                "colortxt" => "000000",
                 "tipoComprobante" => "P",
                 "serie" => $infoEmisor["serie_pagos"],
                 "folio" => $infoEmisor["folio_pagos"],
