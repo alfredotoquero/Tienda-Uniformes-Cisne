@@ -74,6 +74,11 @@ try {
             $fecha = $factura["timbrado"];
             $total = $factura["total"];
 
+            $rutaLogo = $ruta_server . "/imagenes/tiendas/" . $factura["idtienda"] . "_logo.png";
+            $logo = "data:image/png;base64," . (file_exists($rutaLogo)
+                ? base64_encode(file_get_contents($rutaLogo))
+                : base64_encode(file_get_contents($ruta_server . "/assets/images/logo-uniformes-trazo.png")));
+
             include($ruta_server . "/assets/plantillas/correo/envioFactura.php");
             include($ruta_server . "/assets/plantillas/correo/base.php");
 
