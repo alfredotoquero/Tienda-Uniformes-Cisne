@@ -46,6 +46,49 @@ class Tickets{
         }
     }
 
+    public function obtenerTicketsPorCorte($post) {
+        try {
+            $idcorte = mysqli_real_escape_string($this->con, $post["idcorte"]);
+
+            $query = "
+            SELECT
+                a.*,
+                b.serie AS factura_serie,
+                b.folio  AS factura_folio,
+                b.status AS factura_status,
+                c.idtienda
+            FROM
+                ttickets a
+            LEFT JOIN
+                tfacturas b ON b.idfactura = a.idfactura
+            LEFT JOIN
+                tsucursales c ON c.idsucursal = a.idsucursal
+            WHERE
+                a.idcorte = '$idcorte'
+            ORDER BY
+                a.idticket DESC";
+
+            $result = mysqli_query($this->con, $query);
+
+            $tickets = [];
+            while ($row = mysqli_fetch_assoc($result)) {
+                $tickets[] = $row;
+            }
+
+            $respuesta = [
+                "respuesta" => "OK",
+                "tickets"   => $tickets
+            ];
+        } catch (Exception $e) {
+            $respuesta = [
+                "respuesta" => "ERROR",
+                "mensaje"   => $e->getMessage()
+            ];
+        } finally {
+            return $respuesta;
+        }
+    }
+
     public function facturarTicket($post){
         try{
             $idticket = mysqli_real_escape_string($this->con,$post["idticket"]);
