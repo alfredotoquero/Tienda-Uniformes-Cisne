@@ -32,22 +32,6 @@ if (!$factura) {
 }
 
 $correoPrecargado = "";
-$queryCorreo = "
-SELECT
-    c.correo,
-    c.correos_adicionales
-FROM
-    ttickets t
-LEFT JOIN
-    tclientes c ON c.idcliente = t.idcliente
-WHERE
-    t.idfactura = '$idfactura'
-LIMIT 1";
-$datosCorreo = mysqli_fetch_assoc(mysqli_query($con, $queryCorreo));
-if ($datosCorreo) {
-    $partes = array_filter([$datosCorreo["correo"], $datosCorreo["correos_adicionales"]]);
-    $correoPrecargado = implode(",", $partes);
-}
 
 unset($_SESSION["authToken"]);
 $_SESSION["authToken"] = sha1(uniqid(microtime(), true));
@@ -82,40 +66,21 @@ $fechaFormateada = date("d/m/Y H:i", strtotime($factura["timbrado"]));
             <input type="text" class="form-control requerido" name="txtCorreo" id="txtCorreoReenviar"
                 placeholder="Ingresa el correo electrónico" autocomplete="off"
                 data-mensajeerror="Debes indicar el correo electrónico"
-                value="<?= htmlspecialchars($correoPrecargado) ?>"
                 pattern="[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}(\s*,\s*[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})*"
                 title="Ingresa uno o más correos electrónicos válidos separados por coma">
-            <small class="text-muted d-block mt-1">Para múltiples destinatarios, separa los correos con coma</small>
-        </div>
-        <div class="mb-3">
-            <label for="txtCorreoAdicionalReenviar" class="form-label">Correos adicionales <small class="text-muted">(opcional)</small></label>
-            <input type="text" class="form-control" name="txtCorreoAdicional" id="txtCorreoAdicionalReenviar"
-                placeholder="Ingresa correos adicionales" autocomplete="off"
-                pattern="[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}(\s*,\s*[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})*"
-                title="Ingresa uno o más correos electrónicos válidos separados por coma">
-            <small class="text-muted d-block mt-1">Correos extra separados por coma. No se guardarán en el sistema.</small>
+            <small class="text-muted d-block mt-1">Para enviar a múltiples destinatarios, separa los correos con coma (ej: correo1@ejemplo.com, correo2@ejemplo.com)</small>
         </div>
         <button type="button" onclick="validarFormReenviarFactura();" class="btn btn-primary">Reenviar</button>
     </form>
 </div>
 <script>
 function validarFormReenviarFactura() {
-    var regexCorreo = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
     var correos = $("#txtCorreoReenviar").val().split(",");
+    var regexCorreo = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
     for (var i = 0; i < correos.length; i++) {
         if (!regexCorreo.test(correos[i].trim())) {
-            swalFocus("Error", "El correo '" + correos[i].trim() + "' no es válido", "error", "txtCorreoReenviar");
+            swalFocus("Error", "El correo electrónico '" + correos[i].trim() + "' no es válido", "error", "txtCorreoReenviar");
             return;
-        }
-    }
-    var adicionales = $("#txtCorreoAdicionalReenviar").val().trim();
-    if (adicionales !== "") {
-        var arrAdicionales = adicionales.split(",");
-        for (var i = 0; i < arrAdicionales.length; i++) {
-            if (!regexCorreo.test(arrAdicionales[i].trim())) {
-                swalFocus("Error", "El correo adicional '" + arrAdicionales[i].trim() + "' no es válido", "error", "txtCorreoAdicionalReenviar");
-                return;
-            }
         }
     }
     validarFormulario('formReenviar');

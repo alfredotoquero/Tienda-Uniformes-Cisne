@@ -27,9 +27,8 @@ try {
                 break;
             }
 
-            $idfactura       = intval($_POST["idfactura"]);
-            $correo          = $_POST["txtCorreo"];
-            $correoAdicional = isset($_POST["txtCorreoAdicional"]) ? trim($_POST["txtCorreoAdicional"]) : "";
+            $idfactura = intval($_POST["idfactura"]);
+            $correo    = $_POST["txtCorreo"];
 
             if (!$idfactura) throw new Exception("Parámetro inválido");
 
