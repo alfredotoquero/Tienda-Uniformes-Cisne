@@ -46,8 +46,8 @@ $fechaFormateada = date("d/m/Y H:i", strtotime($factura["timbrado"]));
     </div>
     <hr>
     <form id="formReenviar" name="formReenviar">
-        <input type="hidden" name="controlador" value="facturas">
-        <input type="hidden" name="accion" value="reenviar">
+        <input type="hidden" name="controlador" id="controlador" value="facturas">
+        <input type="hidden" name="accion" id="accion" value="reenviar">
         <input type="hidden" name="idusuario" value="<?= $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"] ?>">
         <input type="hidden" name="idfactura" value="<?= (int)$_GET["idfactura"] ?>">
         <input type="hidden" name="authToken" value="<?= $_SESSION["authToken"] ?>">
