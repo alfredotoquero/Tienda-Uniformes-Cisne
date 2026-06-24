@@ -705,14 +705,14 @@ class Pagos{
 
             $emisor = array(
                 "Rfc" => $infoEmisor["rfc"],
-                "Nombre" => $infoEmisor["razon_social"],
+                "Nombre" => utf8_decode(trim($infoEmisor["razon_social"])),
                 "RegimenFiscal" => $regimen_fiscal,
                 "LugarExpedicion" => $infoEmisor["codigo_postal"]
             );
 
             $receptor = array(
                 "Rfc" => $razonsocial["rfc"],
-                "Nombre" => utf8_decode($razonsocial["razon_social"]),
+                "Nombre" => utf8_decode(trim($razonsocial["razon_social"])),
                 "UsoCFDI" => "CP01",
                 "DomicilioFiscalReceptor" => $razonsocial["codigo_postal"],
                 "RegimenFiscalReceptor" => $razonsocial["regimenfiscal"]
