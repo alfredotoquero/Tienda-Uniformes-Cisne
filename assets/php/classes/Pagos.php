@@ -31,7 +31,7 @@ class Pagos{
             select
                 a.idpago,
                 a.idcliente,
-                b.nombre as cliente,
+                coalesce(b.nombre, a.cliente) as cliente,
                 a.total,
                 a.idformapago,
                 c.nombre as formapago,
@@ -239,10 +239,14 @@ class Pagos{
     public function agregarPago($post){
         try{
             $idcliente = mysqli_real_escape_string($this->con, strstr($post["cliente"], "-", true));
+            $nombreCliente = mysqli_real_escape_string($this->con, substr(strstr($post["cliente"], "-"), 1));
             $idformapago = mysqli_real_escape_string($this->con,$post["idformapago"]);
             $fecha = mysqli_real_escape_string($this->con,$post["fecha"]);
             $complemento = mysqli_real_escape_string($this->con,$post["complemento"]);
             $total = mysqli_real_escape_string($this->con,$post["total"]);
+
+            $idcliente_sql = ($idcliente == 0) ? "NULL" : "'".$idcliente."'";
+            $cliente_sql = ($idcliente == 0) ? "'".$nombreCliente."'" : "NULL";
 
             // Iniciar transacción
             mysqli_begin_transaction($this->con);
@@ -256,13 +260,15 @@ class Pagos{
             (
                 idusuario,
                 idcliente,
+                cliente,
                 total,
                 idformapago,
                 fecha,
                 status
             ) values (
                 '".$idusuario."',
-                '".$idcliente."',
+                ".$idcliente_sql.",
+                ".$cliente_sql.",
                 '".$total."',
                 '".$idformapago."',
                 '".$fecha."',
