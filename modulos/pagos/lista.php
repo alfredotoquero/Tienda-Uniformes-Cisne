@@ -49,20 +49,24 @@ if($pagos["result"]=="success"){
                                 <a class="dropdown-item" href="#" onclick="descargarPago(<?= $pago['idpago'] ?>)">
                                     <i class="fa fa-download"></i> Descargar pago
                                 </a>
-                                <div class="dropdown-divider"></div>
-                                <a class="dropdown-item text-danger" href="#" onclick="cancelarPago(<?= $pago['idpago'] ?>)">
-                                    <i class="fa fa-times"></i> Cancelar
-                                </a>
+                                <?php if($pago["status"] == 1): ?>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item text-danger" href="#" data-fancybox data-type="ajax" data-src="/modulos/pagos/cancelar.php?idpago=<?= $pago['idpago'] ?>">
+                                        <i class="fa fa-times"></i> Cancelar
+                                    </a>
+                                <?php endif; ?>
                             <?php else: ?>
-                                <?php if($pago["tiene_factura"]): ?>
+                                <?php if($pago["tiene_factura"] && $pago["status"] == 1): ?>
                                     <a class="dropdown-item" href="#" onclick="timbrarPago(<?= $pago['idpago'] ?>)">
                                         <i class="fa fa-file-text"></i> Timbrar
                                     </a>
                                     <div class="dropdown-divider"></div>
                                 <?php endif; ?>
-                                <a class="dropdown-item text-danger" href="#" onclick="cancelarPago(<?= $pago['idpago'] ?>)">
-                                    <i class="fa fa-times"></i> Cancelar
-                                </a>
+                                <?php if($pago["status"] == 1): ?>
+                                    <a class="dropdown-item text-danger" href="#" onclick="cancelarPago(<?= $pago['idpago'] ?>)">
+                                        <i class="fa fa-times"></i> Cancelar
+                                    </a>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
                     </div>

@@ -37,6 +37,7 @@ class Pagos{
                 c.nombre as formapago,
                 a.fecha,
                 a.uuid,
+                a.status,
                 exists (
                     select 1
                     from tformaspagopedido fp
@@ -1200,6 +1201,290 @@ class Pagos{
         }finally{
             return $respuesta;
         }
+    }
+
+    public function getPago($post){
+        try{
+            $idpago = mysqli_real_escape_string($this->con,$post["idpago"]);
+
+            $query = "
+            select
+                a.idpago,
+                a.idcliente,
+                coalesce(b.nombre, a.cliente) as cliente,
+                a.idrazonsocial,
+                c.rfc as cliente_rfc,
+                a.idemisor,
+                d.rfc as emisor_rfc,
+                a.total,
+                a.uuid,
+                a.fecha,
+                a.serie,
+                a.folio
+            from
+                tpagos a
+            left join
+                tclientes b
+            on
+                b.idcliente = a.idcliente
+            left join
+                tclienterazonessociales c
+            on
+                c.idrazonsocial = a.idrazonsocial
+            left join
+                temisores d
+            on
+                d.idemisor = a.idemisor
+            where
+                a.idpago = '".$idpago."'";
+            $result = mysqli_query($this->con,$query);
+
+            if(mysqli_num_rows($result)==0){
+                throw new Exception("No se pudo recuperar la información del pago");
+            }
+
+            $respuesta = array(
+                "result" => "success",
+                "pago" => mysqli_fetch_assoc($result)
+            );
+        }catch(Exception $e){
+            $respuesta = array(
+                "result" => "error",
+                "mensaje" => $e->getMessage()
+            );
+        }finally{
+            return $respuesta;
+        }
+    }
+
+    public function cancelarPago($post){
+        try{
+            $idpago = mysqli_real_escape_string($this->con,$post["idpago"]);
+
+            $pago = $this->getPago(array(
+                "idpago" => $idpago
+            ));
+
+            if($pago["result"]!="success"){
+                throw new Exception($pago["mensaje"]);
+            }
+
+            $pago = $pago["pago"];
+
+            if(empty($pago["uuid"])){
+                // El pago nunca se timbró: no existe CFDI que cancelar ante el SAT,
+                // solo se revierte su efecto sobre el pedido/factura y se marca cancelado
+                mysqli_begin_transaction($this->con);
+
+                $query = "
+                update
+                    tpagos
+                set
+                    status = 3
+                where
+                    idpago = '".$idpago."'";
+                $ok = mysqli_query($this->con,$query);
+                $ok = $ok && $this->revertirEfectoPago($idpago);
+
+                if($ok){
+                    mysqli_commit($this->con);
+                    $respuesta = array(
+                        "success" => true,
+                        "message" => "El pago se ha cancelado correctamente."
+                    );
+                }else{
+                    mysqli_rollback($this->con);
+                    throw new Exception("No se pudo cancelar el pago.");
+                }
+            }else{
+                $idmotivocancelacion = mysqli_real_escape_string($this->con,$post["slcMotivoCancelacion"]);
+                $uuidsustitucion = mysqli_real_escape_string($this->con,$post["txtUUID"]);
+
+                $query = "
+                select
+                    *
+                from
+                    sat_tcatmotivoscancelacion
+                where
+                    idmotivo = '".$idmotivocancelacion."'";
+                $motivo_cancelacion = mysqli_fetch_assoc(mysqli_query($this->con,$query));
+
+                if($motivo_cancelacion["requiere_uuid"]==1 && !$this->esUUIDValido($uuidsustitucion)){
+                    throw new Exception("El formato del UUID de sustitución no es válido");
+                }
+
+                $ruta_server = $_SERVER["DOCUMENT_ROOT"]."/../1.uniformescisne.mx";
+
+                $cerpath = $ruta_server."/emisores/".$pago["emisor_rfc"]."/sat/certificado.cer";
+                $cerpem = $cerpath.".pem";
+                exec("openssl x509 -in $cerpath -inform DER -out $cerpem");
+
+                $keypem = $ruta_server."/emisores/".$pago["emisor_rfc"]."/sat/llave.key.pem";
+
+                $pfx = $ruta_server."/emisores/".$pago["emisor_rfc"]."/sat/pfx.pfx";
+                $pwdPfx = uniqid();
+
+                if($this->generarPfx($keypem,$cerpem,$pfx,$pwdPfx)){
+                    // Se manda a cancelar el complemento de pago al SAT
+                    $datos = array(
+                        "api_key" => "tek_npzimyh2ajjxpj3p3j2ofozt7c6deej9uu",
+                        "pruebas" => 0,
+                        "tipoComprobante" => "C2",
+                        "pfx" => base64_encode(file_get_contents($pfx)),
+                        "pfx_pwd" => $pwdPfx,
+                        "uuid" => $pago["uuid"],
+                        "rfc_emisor" => $pago["emisor_rfc"],
+                        "rfc_receptor" => $pago["cliente_rfc"],
+                        "total" => $pago["total"],
+                        "cve_motivo_cancelacion" => $motivo_cancelacion["clave"],
+                        "uuid_sustitucion" => $uuidsustitucion
+                    );
+
+                    $curl = curl_init();
+
+                    curl_setopt_array($curl, array(
+                        CURLOPT_URL => 'https://api.xptk.app/timbrador/index.php',
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_ENCODING => '',
+                        CURLOPT_MAXREDIRS => 10,
+                        CURLOPT_TIMEOUT => 0,
+                        CURLOPT_FOLLOWLOCATION => true,
+                        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                        CURLOPT_CUSTOMREQUEST => 'POST',
+                        CURLOPT_POSTFIELDS => http_build_query($datos),
+                        CURLOPT_HTTPHEADER => array(
+                            'Content-Type: application/x-www-form-urlencoded'
+                        )
+                    ));
+
+                    $response = curl_exec($curl);
+                    $response = json_decode($response,true);
+                    curl_close($curl);
+
+                    if($response["status"]=="success"){
+                        // statusCFDI 201 = "cancelado con aceptación pendiente": el receptor tiene
+                        // 3 días para aceptar/rechazar ante el SAT, así que todavía NO se revierte el
+                        // efecto del pago. Eso se hará hasta que un proceso posterior confirme la
+                        // cancelación definitiva (pendiente: cronjob que reconsulte el estatus).
+                        $esDefinitiva = ($response["statusCFDI"] != "201");
+
+                        mysqli_begin_transaction($this->con);
+
+                        $query = "
+                        update
+                            tpagos
+                        set
+                            status = '".($esDefinitiva ? "3" : "2")."'
+                        where
+                            idpago = '".$idpago."'";
+                        $ok = mysqli_query($this->con,$query);
+
+                        if($esDefinitiva){
+                            $ok = $ok && $this->revertirEfectoPago($idpago);
+                        }
+
+                        if($ok){
+                            mysqli_commit($this->con);
+                            $respuesta = array(
+                                "success" => true,
+                                "message" => $esDefinitiva
+                                    ? "El pago se ha cancelado correctamente."
+                                    : "La cancelación se envió al SAT y quedó pendiente de aceptación por el receptor. El efecto del pago se revertirá hasta que se confirme la cancelación definitiva."
+                            );
+                        }else{
+                            mysqli_rollback($this->con);
+                            throw new Exception("El CFDI se canceló ante el SAT, pero no se pudo actualizar el registro del pago. Contacta a soporte para corregir el registro manualmente.");
+                        }
+                    }else{
+                        throw new Exception($response["text"]);
+                    }
+                }else{
+                    throw new Exception("Ocurrió un error en la generación de los archivos para cancelación");
+                }
+            }
+        }catch(Exception $e){
+            $respuesta = array(
+                "success" => false,
+                "message" => $e->getMessage()
+            );
+        }finally{
+            return $respuesta;
+        }
+    }
+
+    // Revierte el efecto de un pago sobre los pedidos que cubrió (abonado/statuspago) y,
+    // si alguno estaba ligado a una factura, le regresa el saldo cobrado. Se usa tanto para
+    // pagos timbrados (tras cancelar el CFDI) como para pagos que nunca llegaron a timbrarse.
+    private function revertirEfectoPago($idpago){
+        $query = "
+        select
+            a.idpedido,
+            a.monto,
+            b.total,
+            b.abonado,
+            b.idfactura
+        from
+            tformaspagopedido a
+        join
+            tpedidos b
+        on
+            b.idpedido = a.idpedido
+        where
+            a.idpago = '".$idpago."'";
+        $aplicaciones = mysqli_fetch_all(mysqli_query($this->con,$query),MYSQLI_ASSOC);
+
+        $ok = true;
+        foreach($aplicaciones as $aplicacion){
+            $idpedido = (int)$aplicacion["idpedido"];
+            $monto = floatval($aplicacion["monto"]);
+            $nuevoabonado = floatval($aplicacion["abonado"]) - $monto;
+            $statuspago = ($nuevoabonado >= floatval($aplicacion["total"])) ? 1 : 0;
+
+            $query = "
+            update
+                tpedidos
+            set
+                abonado = abonado - ".$monto.",
+                statuspago = ".$statuspago."
+            where
+                idpedido = '".$idpedido."'";
+            $ok = $ok && mysqli_query($this->con,$query);
+
+            if($aplicacion["idfactura"] > 0){
+                $idfacturapagada = (int)$aplicacion["idfactura"];
+                $query = "
+                update
+                    tfacturas
+                set
+                    saldo = saldo + ".$monto."
+                where
+                    idfactura = '".$idfacturapagada."'";
+                $ok = $ok && mysqli_query($this->con,$query);
+            }
+        }
+
+        $query = "
+        delete
+        from
+            tformaspagopedido
+        where
+            idpago = '".$idpago."'";
+        $ok = $ok && mysqli_query($this->con,$query);
+
+        return $ok;
+    }
+
+    private function esUUIDValido($uuid){
+        return preg_match(
+            '/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i',
+            $uuid
+        ) === 1;
+    }
+
+    private function generarPfx($keypem, $cerpem, $pfx, $pwd){
+        // -legacy fuerza algoritmos RC2/3DES compatibles con librerías antiguas como Chilkat 9.5.x
+        exec("openssl pkcs12 -export -legacy -inkey $keypem -in $cerpem -passout pass:'$pwd' -out $pfx");
+        return file_exists($pfx) && filesize($pfx) > 0;
     }
 
 }
