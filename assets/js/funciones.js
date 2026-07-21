@@ -187,6 +187,52 @@ function timbrarPago(idpago){
     });
 }
 
+function cancelarPago(idpago){
+    Swal.fire({
+        title: "¿Deseas cancelar este pago?",
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Sí, cancelar",
+        cancelButtonText: "No"
+    }).then(function(result) {
+        if (!result.value) return;
+
+        $.ajax({
+            url: "/assets/php/controladores/pagos.php",
+            method: "POST",
+            data: {
+                proceso: "cancelarPago",
+                idpago: idpago
+            },
+            dataType: "json",
+            success: function(res) {
+                if (res.success) {
+                    Swal.fire({
+                        type: "success",
+                        title: "Éxito",
+                        text: res.message
+                    }).then(function() {
+                        App.modulos.pagos();
+                    });
+                } else {
+                    Swal.fire({
+                        type: "error",
+                        title: "Error",
+                        text: res.message
+                    });
+                }
+            },
+            error: function() {
+                Swal.fire({
+                    type: "error",
+                    title: "Error",
+                    text: "No se pudo conectar con el servidor"
+                });
+            }
+        });
+    });
+}
+
 function verPDF_Pago(idpago){
     $.ajax({
         url: "/assets/php/controladores/pagos.php",

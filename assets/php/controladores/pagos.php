@@ -29,6 +29,9 @@ try{
         case "generarComplementoPago":
             $respuesta = $clasePagos->generarComplementoPago($_POST);
         break;
+        case "cancelarPago":
+            $respuesta = $clasePagos->cancelarPago($_POST);
+        break;
         default: $respuesta = $arrayerror; break;
     }
     
