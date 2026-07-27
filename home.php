@@ -425,14 +425,6 @@ function fecha_formateada2($fecha)
 									</a>
 								</li>
 								<li>
-									<a href="?modulo1=pedidossistema">
-										<span class="nav-icon">
-											<i class="fa fa-file-alt"></i>
-										</span>
-										<span class="nav-text">Pedidos Sistema</span>
-									</a>
-								</li>
-								<li>
 									<a href="?modulo1=pagos">
 										<span class="nav-icon">
 											<i class="fas fa-money-bill"></i>
