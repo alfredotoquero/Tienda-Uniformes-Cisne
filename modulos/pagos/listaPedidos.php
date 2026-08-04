@@ -34,7 +34,7 @@ if($pedidos["result"]=="success"){
                 <td>$<?= number_format($tmp["abonado"],2) ?></td>
                 <td>$<? echo number_format($tmp["total"] - $tmp["abonado"], 2); ?></td>
                 <td>
-                    <input type="text" name="txtPago[<?= $tmp["idpedido"] ?>]" class="form-control txtPago" data-maximo="<?= $tmp["total"] - $tmp["abonado"] ?>" data-idfactura="<?= $tmp["idfactura"] ?>">
+                    <input type="text" name="txtPago[<?= $tmp["idpedido"] ?>]" class="form-control txtPago" data-maximo="<?= $tmp["total"] - $tmp["abonado"] ?>" data-idfactura="<?= $tmp["idfactura"] ?>" data-idmetodopago="<?= $tmp["idmetodopago"] ?>">
                 </td>
                 <td><? echo $p->fecha_formateada($tmp["fecha"],false); ?></td>
             </tr>
