@@ -107,17 +107,22 @@ class Pagos{
 
             $query = "
             select
-                *
+                v.*,
+                f.idmetodopago
             from
-                vpedidos
+                vpedidos v
+            left join
+                tfacturas f
+            on
+                f.idfactura = v.idfactura
             where
-                idsucursal = '".$idsucursal."' and
-                total > 0 and
-                statuspago = 0 and
-                status = 'A' and
-                cliente = '".$cliente."'
+                v.idsucursal = '".$idsucursal."' and
+                v.total > 0 and
+                v.statuspago = 0 and
+                v.status = 'A' and
+                v.cliente = '".$cliente."'
             order by
-                idpedido";
+                v.idpedido";
             $result = mysqli_query($this->con,$query);
 
             if(mysqli_num_rows($result)==0){
@@ -583,7 +588,7 @@ class Pagos{
             $idformapago = $pago["idformapago"];
             $fecha = substr($pago["fecha"], 0, 10);
 
-            // Obtenemos la información de los pagos que se realizaron
+            // Obtenemos la información de los pagos que se realizaron (solo facturas con método de pago PPD requieren complemento)
             $query = "
             select
                 a.idpedido,
@@ -595,10 +600,15 @@ class Pagos{
                 tpedidos b
             on
                 b.idpedido = a.idpedido
+            left join
+                tfacturas c
+            on
+                c.idfactura = b.idfactura
             where
                 a.idpago = '".$idpago."' and
                 b.idfactura is not null and
-                b.idfactura > 0";
+                b.idfactura > 0 and
+                c.idmetodopago = 1";
             $result = mysqli_query($this->con,$query);
 
             if(mysqli_num_rows($result)==0){

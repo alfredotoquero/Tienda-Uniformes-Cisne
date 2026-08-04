@@ -128,8 +128,8 @@ function registrarPago() {
 
     // Recolectar pedidos con pago capturado > 0
     var pedidos = [];
-    var tieneFacturados = false;
-    var tieneNoFacturados = false;
+    var tieneConComplemento = false;
+    var tieneSinComplemento = false;
     $("#listaPedidos input[name^='txtPago']").each(function() {
         var pagoRecibido = parseFloat($(this).val()) || 0;
 
@@ -138,18 +138,21 @@ function registrarPago() {
             var nombre = $(this).attr('name');
             var idpedido = nombre.match(/\[(\d+)\]/)[1];
             var idfactura = $(this).data("idfactura");
-            var esFacturado = idfactura != null && idfactura !== "" && parseInt(idfactura) > 0;
+            var idmetodopago = $(this).data("idmetodopago");
+            var estaFacturado = idfactura != null && idfactura !== "" && parseInt(idfactura) > 0;
+            // Solo las facturas con método de pago PPD requieren complemento de pago
+            var requiereComplemento = estaFacturado && parseInt(idmetodopago) === 1;
 
             pedidos.push({
                 idpedido: idpedido,
                 monto: pagoRecibido,
-                idfactura: esFacturado ? idfactura : 0
+                idfactura: estaFacturado ? idfactura : 0
             });
 
-            if (esFacturado) {
-                tieneFacturados = true;
+            if (requiereComplemento) {
+                tieneConComplemento = true;
             } else {
-                tieneNoFacturados = true;
+                tieneSinComplemento = true;
             }
         }
     });
@@ -164,17 +167,17 @@ function registrarPago() {
         return;
     }
 
-    // Validar que todos los pedidos sean del mismo tipo (facturado o no facturado)
-    if (tieneFacturados && tieneNoFacturados) {
+    // Validar que todos los pedidos sean del mismo tipo (requieren complemento o no)
+    if (tieneConComplemento && tieneSinComplemento) {
         Swal.fire({
             type: 'warning',
             title: 'Atención',
-            text: 'No se puede registrar un pago para pedidos facturados y sin facturar al mismo tiempo'
+            text: 'No se puede registrar en un mismo pago pedidos facturados en PPD (requieren complemento de pago) junto con otros pedidos'
         });
         return;
     }
 
-    var complemento = tieneFacturados ? 1 : 0;
+    var complemento = tieneConComplemento ? 1 : 0;
 
     // Calcular monto total del pago
     var montoTotal = 0;
