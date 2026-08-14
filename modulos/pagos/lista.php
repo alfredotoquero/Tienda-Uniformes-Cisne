@@ -30,7 +30,9 @@ if($pagos["result"]=="success"){
                 <td><?= $p->fecha_formateada($pago["fecha"],false) ?></td>
                 <td class="text-center">
                     <?php if(!empty($pago["uuid"])): ?>
-                        <i class="fa fa-check text-success"></i>
+                        <i class="fa fa-check text-success" title="Complemento timbrado"></i>
+                    <?php elseif($pago["tiene_factura"] && $pago["status"] == 1): ?>
+                        <i class="fa fa-clock-o text-warning" title="Complemento de pago pendiente de timbrar"></i>
                     <?php endif; ?>
                 </td>
                 <td class="text-right">

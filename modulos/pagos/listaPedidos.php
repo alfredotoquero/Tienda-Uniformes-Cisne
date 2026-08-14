@@ -26,15 +26,18 @@ if($pedidos["result"]=="success"){
             <tr>
                 <td><?= $tmp["idpedido"] ?></td>
                 <td class="text-center">
-                    <? if(!empty($tmp["idfactura"])){ ?>
+                    <? if($tmp["facturas"] > 0){ ?>
                     <i class="fa fa-check text-success"></i>
+                    <? if($tmp["facturasppd"] > 0){ ?>
+                    <span class="badge badge-info">PPD</span>
+                    <? } ?>
                     <? } ?>
                 </td>
                 <td>$<?= number_format($tmp["total"],2) ?></td>
                 <td>$<?= number_format($tmp["abonado"],2) ?></td>
                 <td>$<? echo number_format($tmp["total"] - $tmp["abonado"], 2); ?></td>
                 <td>
-                    <input type="text" name="txtPago[<?= $tmp["idpedido"] ?>]" class="form-control txtPago" data-maximo="<?= $tmp["total"] - $tmp["abonado"] ?>" data-idfactura="<?= $tmp["idfactura"] ?>" data-idmetodopago="<?= $tmp["idmetodopago"] ?>">
+                    <input type="text" name="txtPago[<?= $tmp["idpedido"] ?>]" class="form-control txtPago" data-maximo="<?= $tmp["total"] - $tmp["abonado"] ?>" data-requierecomplemento="<?= ($tmp["facturasppd"] > 0) ? 1 : 0 ?>">
                 </td>
                 <td><? echo $p->fecha_formateada($tmp["fecha"],false); ?></td>
             </tr>

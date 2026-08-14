@@ -137,16 +137,13 @@ function registrarPago() {
             // Extraer el idpedido del formato txtPago[123]
             var nombre = $(this).attr('name');
             var idpedido = nombre.match(/\[(\d+)\]/)[1];
-            var idfactura = $(this).data("idfactura");
-            var idmetodopago = $(this).data("idmetodopago");
-            var estaFacturado = idfactura != null && idfactura !== "" && parseInt(idfactura) > 0;
-            // Solo las facturas con método de pago PPD requieren complemento de pago
-            var requiereComplemento = estaFacturado && parseInt(idmetodopago) === 1;
+            // El servidor decide en definitiva si se timbra complemento; esta bandera solo
+            // sirve para avisarle al vendedor que no mezcle pedidos de distinto tipo.
+            var requiereComplemento = parseInt($(this).data("requierecomplemento")) === 1;
 
             pedidos.push({
                 idpedido: idpedido,
-                monto: pagoRecibido,
-                idfactura: estaFacturado ? idfactura : 0
+                monto: pagoRecibido
             });
 
             if (requiereComplemento) {
@@ -176,8 +173,6 @@ function registrarPago() {
         });
         return;
     }
-
-    var complemento = tieneConComplemento ? 1 : 0;
 
     // Calcular monto total del pago
     var montoTotal = 0;
@@ -209,7 +204,6 @@ function registrarPago() {
             idformapago: formaPago,
             fecha: fecha,
             pedidos: pedidos,
-            complemento: complemento,
             total: montoTotal
         };
 
@@ -238,9 +232,11 @@ function registrarPago() {
                         });
                     }
 
+                    // El pago pudo registrarse aunque su complemento de pago no se haya
+                    // timbrado; en ese caso hay que avisarlo, no darlo por exitoso
                     Swal.fire({
-                        type: 'success',
-                        title: 'Éxito',
+                        type: response.complementopendiente ? 'warning' : 'success',
+                        title: response.complementopendiente ? 'Pago registrado sin complemento' : 'Éxito',
                         text: response.message || 'Pago registrado correctamente'
                     }).then(() => {
                         $.fancybox.close();
