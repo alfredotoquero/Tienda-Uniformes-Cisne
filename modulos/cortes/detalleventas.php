@@ -228,7 +228,26 @@ function imprimir(idcuenta) {
                                     ?>
                                     </td>
                                     <td><? echo fecha_formateada($ticket["fecha"]); ?></td>
-                                    <td><? echo !empty($ticket["idfactura"]) ? $ticket["factura_serie"]."-".$ticket["factura_folio"] : "-"; ?></td>
+                                    <?
+                                    // El ticket conserva su idfactura aunque la factura se cancele,
+                                    // así que el estado se toma de la factura y no del enlace: una
+                                    // cancelada deja de contar como facturado y se puede refacturar
+                                    $facturaviva = !empty($ticket["idfactura"]) && $ticket["factura_status"] != 3;
+                                    ?>
+                                    <td>
+                                        <?
+                                        if(empty($ticket["idfactura"])){
+                                            echo "-";
+                                        }else{
+                                            echo $ticket["factura_serie"]."-".$ticket["factura_folio"];
+                                            if($ticket["factura_status"] == 2){
+                                                echo ' <span class="badge badge-warning">EN CANCELACIÓN</span>';
+                                            }else if($ticket["factura_status"] == 3){
+                                                echo ' <span class="badge badge-danger">CANCELADA</span>';
+                                            }
+                                        }
+                                        ?>
+                                    </td>
                                     <td>
                                         <div class="btn-group dropdown">
                                             <button type="button" class="btn white" data-toggle="dropdown" aria-expanded="false">Opciones <span class="caret"></span></button>
@@ -236,7 +255,7 @@ function imprimir(idcuenta) {
                                                 <a href="javascript:;" onClick="imprimirTicket(<? echo $ticket["idticket"]; ?>,0,<? echo $tipoimpresion; ?>)"><li class="dropdown-item">Imprimir</li></a>
                                                 <? if($tipocuenta!=""){ ?>
                                                 <a href="?modulo1=cortes&modulo2=detallev&modulo3=detallecuenta&idticket=<? echo $ticket["idticket"]; ?>&idcuenta=<? echo $ticket["idcuenta"]; ?>&idcorte=<? echo $_GET["idcorte"]; ?>"><li class="dropdown-item">Ver detalle</li></a>
-                                                <? if($tipocuenta!="" && !empty($ticket["idcuenta"]) && empty($ticket["idfactura"])){ ?>
+                                                <? if($tipocuenta!="" && !empty($ticket["idcuenta"]) && !$facturaviva){ ?>
                                                 <a href="javascript:;" data-fancybox data-type="ajax" data-src="/modulos/cortes/facturar.php?idticket=<? echo $ticket['idticket']; ?>"><li class="dropdown-item">Facturar</li></a>
                                                 <? } ?>
                                                 <a href="?modulo1=cortes&modulo2=devolucion&idcorte=<? echo $_GET["idcorte"]; ?>&idcuenta=<? echo $ticket["idcuenta"]; ?>&idticket=<? echo $ticket["idticket"]; ?>"><li class="dropdown-item">Devolución</li></a>
@@ -244,7 +263,10 @@ function imprimir(idcuenta) {
                                                 <? if (!empty($ticket["idfactura"])) { ?>
                                                 <a href="javascript:;" onClick="solicitudServidor('facturas','verPDF','idfactura=<? echo $ticket['idfactura']; ?>','')"><li class="dropdown-item">Ver Factura</li></a>
                                                 <a href="/modulos/facturas/descargar.php?idfactura=<? echo $ticket['idfactura']; ?>"><li class="dropdown-item">Descargar Archivos</li></a>
+                                                <? // Ver y descargar siguen disponibles para una factura cancelada (el CFDI existe y se ocupa como respaldo), reenviarla al cliente ya no ?>
+                                                <? if($facturaviva){ ?>
                                                 <a href="javascript:;" data-fancybox data-type="ajax" data-src="/modulos/facturas/reenviar.php?idfactura=<? echo $ticket['idfactura']; ?>"><li class="dropdown-item">Reenviar Factura</li></a>
+                                                <? } ?>
                                                 <? } ?>
                                             </ul>
                                         </div>

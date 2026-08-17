@@ -11,10 +11,15 @@ class Tickets{
         try{
             $idticket = mysqli_real_escape_string($this->con,$post["idticket"]);
 
+            // Se arrastra el estado de la factura porque el ticket conserva idfactura aunque
+            // la factura se cancele: sin el status no hay forma de distinguir un ticket ya
+            // facturado de uno cuya factura quedó cancelada y se puede volver a facturar.
             $query = "
             select
                 a.folio,
                 a.idcuenta,
+                a.idfactura,
+                c.status as factura_status,
                 b.idtienda,
                 b.nombre as sucursal
             from
@@ -23,6 +28,10 @@ class Tickets{
                 tsucursales b
             on
                 b.idsucursal = a.idsucursal
+            left join
+                tfacturas c
+            on
+                c.idfactura = a.idfactura
             where
                 a.idticket = '".$idticket."'";
             $result = mysqli_query($this->con,$query);
@@ -103,6 +112,33 @@ class Tickets{
             $idmetodopago = mysqli_real_escape_string($this->con,$post["slcMetodoPago"]);
             $idformapago = ($idmetodopago==1) ? 21 : mysqli_real_escape_string($this->con,$post["slcFormaPago"]);
             $correo = mysqli_real_escape_string($this->con,$post["txtCorreo"]);
+
+            // Un ticket solo puede tener una factura viva. Se revisa aquí y no solo en el
+            // formulario porque el estado pudo cambiar desde que se abrió la pantalla, y
+            // timbrar dos veces el mismo ticket obliga a cancelar ante el SAT.
+            $query = "
+            select
+                b.idfactura,
+                b.serie,
+                b.folio,
+                b.status
+            from
+                ttickets a
+            join
+                tfacturas b
+            on
+                b.idfactura = a.idfactura
+            where
+                a.idticket = '".$idticket."'";
+            $facturaprevia = mysqli_fetch_assoc(mysqli_query($this->con,$query));
+
+            // status 3 = cancelada: esa sí se puede reemplazar. La 2 (cancelación pendiente
+            // de aceptación) todavía no, porque el receptor puede rechazarla y seguiría viva.
+            if($facturaprevia && $facturaprevia["status"] != 3){
+                throw new Exception(($facturaprevia["status"] == 2)
+                    ? "Este ticket tiene la factura ".$facturaprevia["serie"]."-".$facturaprevia["folio"]." en proceso de cancelación. Espera a que el SAT la confirme para volver a facturarlo."
+                    : "Este ticket ya está facturado con la factura ".$facturaprevia["serie"]."-".$facturaprevia["folio"].".");
+            }
 
             $query = "
             select
@@ -293,6 +329,9 @@ class Tickets{
                     idemisor,
                     razonsocial,
                     rfc,
+                    codigo_postal,
+                    regimenfiscal,
+                    usocfdi,
                     idmetodopago,
                     idformapago,
                     serie,
@@ -306,8 +345,11 @@ class Tickets{
                 ) values (
                     '".$idusuario."',
                     '".$idemisor."',
-                    '".$receptor["Nombre"]."',
-                    '".$receptor["Rfc"]."',
+                    '".$razonsocial."',
+                    '".$rfc."',
+                    '".$codigo_postal."',
+                    '".$regimenfiscal."',
+                    '".$usocfdi."',
                     '".$idmetodopago."',
                     '".$idformapago."',
                     '".$serie."',
