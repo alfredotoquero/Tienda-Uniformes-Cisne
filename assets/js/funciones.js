@@ -187,6 +187,45 @@ function timbrarPago(idpago){
     });
 }
 
+// Reconsulta ante el SAT un complemento que quedó pendiente de que el receptor acepte o
+// rechace la cancelación. No pide confirmación porque por sí sola no cambia nada: lo que
+// cambia es el estatus que devuelva el SAT.
+function verificarEstatusSAT(idpago){
+    $.ajax({
+        url: "/assets/php/controladores/pagos.php",
+        method: "POST",
+        data: {
+            proceso: "verificarEstatusSAT",
+            idpago: idpago
+        },
+        dataType: "json",
+        success: function(res) {
+            if (res.success) {
+                Swal.fire({
+                    type: "success",
+                    title: "Estatus consultado",
+                    text: res.message
+                }).then(function() {
+                    App.modulos.pagos();
+                });
+            } else {
+                Swal.fire({
+                    type: "error",
+                    title: "Error",
+                    text: res.message
+                });
+            }
+        },
+        error: function() {
+            Swal.fire({
+                type: "error",
+                title: "Error",
+                text: "No se pudo conectar con el servidor"
+            });
+        }
+    });
+}
+
 function cancelarPago(idpago){
     Swal.fire({
         title: "¿Deseas cancelar este pago?",

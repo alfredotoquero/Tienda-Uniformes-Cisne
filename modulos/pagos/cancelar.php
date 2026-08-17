@@ -1,6 +1,6 @@
 <?
 include_once($_SERVER["DOCUMENT_ROOT"] . "/vm39845um223u/c91ktn24g7if5u.php");
-include($_SERVER["DOCUMENT_ROOT"]."/assets/php/classes/SAT.php");
+include_once($_SERVER["DOCUMENT_ROOT"]."/assets/php/classes/SAT.php");
 include($_SERVER["DOCUMENT_ROOT"]."/assets/php/classes/Pagos.php");
 
 $p = new Pagos();

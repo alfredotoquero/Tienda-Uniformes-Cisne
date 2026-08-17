@@ -2,10 +2,13 @@
 class Pagos{
 
     private $con;
+    private $claseSAT;
 
     function __construct(){
         include_once($_SERVER["DOCUMENT_ROOT"]."/2cnytm029mp3r/cm293uc5904uh.php");
+        include_once($_SERVER["DOCUMENT_ROOT"]."/assets/php/classes/SAT.php");
         $this->con = $con;
+        $this->claseSAT = new SAT();
     }
 
     /**
@@ -1504,6 +1507,7 @@ class Pagos{
                 d.rfc as emisor_rfc,
                 a.total,
                 a.uuid,
+                a.status,
                 a.fecha,
                 a.serie,
                 a.folio
@@ -1557,9 +1561,18 @@ class Pagos{
 
             $pago = $pago["pago"];
 
-            if(empty($pago["uuid"])){
-                // El pago nunca se timbró: no existe CFDI que cancelar ante el SAT,
-                // solo se revierte su efecto sobre el pedido/factura y se marca cancelado
+            if($pago["status"] == 2){
+                throw new Exception("La cancelación del complemento sigue pendiente de aceptación ante el SAT. Verifica su estatus antes de cancelar el pago.");
+            }
+
+            if($pago["status"] == 3){
+                throw new Exception("Este pago ya se encuentra cancelado.");
+            }
+
+            if(empty($pago["uuid"]) || $pago["status"] == 4){
+                // Sin CFDI que cancelar ante el SAT: o el pago nunca se timbró, o su
+                // complemento ya se canceló y solo falta cerrar el pago. En ambos casos se
+                // revierte su efecto sobre el pedido/factura y se marca cancelado.
                 mysqli_begin_transaction($this->con);
 
                 $query = "
@@ -1654,36 +1667,32 @@ class Pagos{
 
                     if($response["status"]=="success"){
                         // statusCFDI 201 = "cancelado con aceptación pendiente": el receptor tiene
-                        // 3 días para aceptar/rechazar ante el SAT, así que todavía NO se revierte el
-                        // efecto del pago. Eso se hará hasta que un proceso posterior confirme la
-                        // cancelación definitiva (pendiente: cronjob que reconsulte el estatus).
+                        // 3 días para aceptar/rechazar ante el SAT, así que el complemento queda
+                        // en status 2 hasta que verificarEstatusSAT o el cronjob lo resuelvan.
+                        //
+                        // Cuando la cancelación sí es definitiva el pago queda en status 4:
+                        // el complemento ya no existe ante el SAT, pero revertir el efecto del
+                        // pago sobre pedidos y saldos es una decisión del usuario, que la toma
+                        // con "Cancelar pago". Mismo criterio que la intranet, que comparte
+                        // esta tabla.
                         $esDefinitiva = ($response["statusCFDI"] != "201");
-
-                        mysqli_begin_transaction($this->con);
 
                         $query = "
                         update
                             tpagos
                         set
-                            status = '".($esDefinitiva ? "3" : "2")."'
+                            status = '".($esDefinitiva ? "4" : "2")."'
                         where
                             idpago = '".$idpago."'";
-                        $ok = mysqli_query($this->con,$query);
 
-                        if($esDefinitiva){
-                            $ok = $ok && $this->revertirEfectoPago($idpago);
-                        }
-
-                        if($ok){
-                            mysqli_commit($this->con);
+                        if(mysqli_query($this->con,$query)){
                             $respuesta = array(
                                 "success" => true,
                                 "message" => $esDefinitiva
-                                    ? "El pago se ha cancelado correctamente."
-                                    : "La cancelación se envió al SAT y quedó pendiente de aceptación por el receptor. El efecto del pago se revertirá hasta que se confirme la cancelación definitiva."
+                                    ? "El complemento de pago se ha cancelado correctamente. Ahora puedes cancelar el pago."
+                                    : "La cancelación se envió al SAT y quedó pendiente de aceptación por el receptor. Podrás cancelar el pago hasta que se confirme la cancelación definitiva."
                             );
                         }else{
-                            mysqli_rollback($this->con);
                             throw new Exception("El CFDI se canceló ante el SAT, pero no se pudo actualizar el registro del pago. Contacta a soporte para corregir el registro manualmente.");
                         }
                     }else{
@@ -1693,6 +1702,93 @@ class Pagos{
                     throw new Exception("Ocurrió un error en la generación de los archivos para cancelación");
                 }
             }
+        }catch(Exception $e){
+            $respuesta = array(
+                "success" => false,
+                "message" => $e->getMessage()
+            );
+        }finally{
+            return $respuesta;
+        }
+    }
+
+    /**
+     * Reconsulta ante el SAT un complemento de pago que quedó en proceso de cancelación y
+     * aplica el desenlace: lo marca como cancelado (status 4, dejando el pago vivo para que
+     * el usuario decida cancelarlo), lo regresa a activo si el receptor rechazó la solicitud,
+     * o lo deja igual si la solicitud sigue viva.
+     *
+     * El barrido masivo de documentos en proceso de cancelación vive en la intranet
+     * (cronjobs/verificarStatusCanceladas.php), que trabaja sobre esta misma base; aquí solo
+     * se expone la consulta individual desde el listado.
+     *
+     * @access public
+     * @param array $post   Debe contener idpago
+     * @return array
+     */
+    public function verificarEstatusSAT($post){
+        try{
+            $idpago = mysqli_real_escape_string($this->con,$post["idpago"]);
+
+            $pago = $this->getPago(array(
+                "idpago" => $idpago
+            ));
+
+            if($pago["result"] != "success"){
+                throw new Exception($pago["mensaje"]);
+            }
+
+            $pago = $pago["pago"];
+
+            if($pago["status"] != 2){
+                throw new Exception("El complemento de este pago no se encuentra en proceso de cancelación.");
+            }
+
+            if(empty($pago["uuid"])){
+                throw new Exception("Este pago no tiene un complemento timbrado; no hay nada que consultar ante el SAT.");
+            }
+
+            $ruta_server = $_SERVER["DOCUMENT_ROOT"]."/../1.uniformescisne.mx";
+
+            $consulta = $this->claseSAT->consultarEstatusCFDI(
+                $this->claseSAT->rutaXMLComprobante($ruta_server,$pago["emisor_rfc"],"pagos",$pago["uuid"]),
+                $pago["emisor_rfc"],
+                $pago["cliente_rfc"]
+            );
+
+            if($consulta["respuesta"] != "OK"){
+                throw new Exception($consulta["mensaje"]);
+            }
+
+            $mensaje = $consulta["mensaje"];
+
+            if($consulta["resultado"] == "cancelado" || $consulta["resultado"] == "activo"){
+                $nuevostatus = ($consulta["resultado"] == "cancelado") ? "4" : "1";
+
+                $query = "
+                update
+                    tpagos
+                set
+                    status = '".$nuevostatus."'
+                where
+                    idpago = '".$idpago."'";
+
+                if(!mysqli_query($this->con,$query)){
+                    throw new Exception("El SAT resolvió la solicitud de cancelación, pero no se pudo actualizar el registro del pago. Contacta a soporte.");
+                }
+
+                if($consulta["resultado"] == "cancelado"){
+                    $mensaje .= " Ahora puedes cancelar el pago.";
+                }
+            }
+
+            $respuesta = array(
+                "success" => true,
+                "message" => $mensaje,
+                "resultado" => $consulta["resultado"],
+                "estado" => $consulta["estado"],
+                "estatus_cancelacion" => $consulta["estatus_cancelacion"]
+            );
         }catch(Exception $e){
             $respuesta = array(
                 "success" => false,
