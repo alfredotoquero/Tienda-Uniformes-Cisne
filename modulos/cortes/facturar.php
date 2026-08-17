@@ -14,7 +14,19 @@ $ticket = $t->obtenerTicket(array(
     "idticket" => $_GET["idticket"]
 ))["ticket"];
 
-if(!empty($ticket["idtienda"])){
+// El ticket conserva su idfactura aunque la factura se cancele, así que aquí se corta con
+// el estado y no con la sola existencia del enlace: cancelada (3) se puede volver a
+// facturar, en proceso de cancelación (2) todavía no porque el receptor puede rechazarla.
+$facturaviva = !empty($ticket["idfactura"]) && $ticket["factura_status"] != 3;
+
+if($facturaviva){
+?>
+<script>
+    $.fancybox.close();
+    Swal.fire("Atención", "<?= ($ticket["factura_status"] == 2) ? "Este ticket tiene una factura en proceso de cancelación. Espera a que el SAT la confirme para volver a facturarlo." : "Este ticket ya está facturado." ?>", "warning");
+</script>
+<?
+}else if(!empty($ticket["idtienda"])){
     $regimenesfiscales = $sat->obtenerRegimenesFiscales()["regimenesfiscales"];
     $usoscfdi = $sat->obtenerUsosCFDI()["usoscfdi"];
     $metodospago = $sat->obtenerMetodosPago()["metodospago"];
