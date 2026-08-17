@@ -29,7 +29,11 @@ if($pagos["result"]=="success"){
                 <td><?= $pago["formapago"] ?></td>
                 <td><?= $p->fecha_formateada($pago["fecha"],false) ?></td>
                 <td class="text-center">
-                    <?php if(!empty($pago["uuid"])): ?>
+                    <?php if($pago["status"] == 2): ?>
+                        <i class="fa fa-hourglass-half text-warning" title="Cancelación en proceso: pendiente de que el receptor la acepte ante el SAT"></i>
+                    <?php elseif($pago["status"] == 4): ?>
+                        <i class="fa fa-ban text-danger" title="Complemento cancelado ante el SAT; falta cancelar el pago"></i>
+                    <?php elseif(!empty($pago["uuid"])): ?>
                         <i class="fa fa-check text-success" title="Complemento timbrado"></i>
                     <?php elseif($pago["tiene_factura"] && $pago["status"] == 1): ?>
                         <i class="fa fa-clock-o text-warning" title="Complemento de pago pendiente de timbrar"></i>
@@ -55,6 +59,16 @@ if($pagos["result"]=="success"){
                                     <div class="dropdown-divider"></div>
                                     <a class="dropdown-item text-danger" href="#" data-fancybox data-type="ajax" data-src="/modulos/pagos/cancelar.php?idpago=<?= $pago['idpago'] ?>">
                                         <i class="fa fa-times"></i> Cancelar
+                                    </a>
+                                <?php elseif($pago["status"] == 2): ?>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="#" onclick="verificarEstatusSAT(<?= $pago['idpago'] ?>)">
+                                        <i class="fa fa-refresh"></i> Verificar estatus en SAT
+                                    </a>
+                                <?php elseif($pago["status"] == 4): ?>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item text-danger" href="#" onclick="cancelarPago(<?= $pago['idpago'] ?>)">
+                                        <i class="fa fa-times"></i> Cancelar pago
                                     </a>
                                 <?php endif; ?>
                             <?php else: ?>
