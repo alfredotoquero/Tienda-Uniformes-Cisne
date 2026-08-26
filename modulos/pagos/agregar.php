@@ -126,7 +126,8 @@ function registrarPago() {
         return;
     }
 
-    // Recolectar pedidos con pago capturado > 0
+    // Recolectar los documentos con pago capturado > 0. Cada renglón es una factura del
+    // pedido o la parte del pedido que aún no se factura (idfactura = 0)
     var pedidos = [];
     var tieneConComplemento = false;
     var tieneSinComplemento = false;
@@ -134,15 +135,13 @@ function registrarPago() {
         var pagoRecibido = parseFloat($(this).val()) || 0;
 
         if (pagoRecibido > 0) {
-            // Extraer el idpedido del formato txtPago[123]
-            var nombre = $(this).attr('name');
-            var idpedido = nombre.match(/\[(\d+)\]/)[1];
             // El servidor decide en definitiva si se timbra complemento; esta bandera solo
-            // sirve para avisarle al vendedor que no mezcle pedidos de distinto tipo.
+            // sirve para avisarle al vendedor que no mezcle documentos de distinto tipo.
             var requiereComplemento = parseInt($(this).data("requierecomplemento")) === 1;
 
             pedidos.push({
-                idpedido: idpedido,
+                idpedido: $(this).data("idpedido"),
+                idfactura: $(this).data("idfactura"),
                 monto: pagoRecibido
             });
 
@@ -154,22 +153,23 @@ function registrarPago() {
         }
     });
 
-    // Validar que haya al menos un pedido con pago capturado
+    // Validar que haya al menos un documento con pago capturado
     if (pedidos.length == 0) {
         Swal.fire({
             type: 'warning',
             title: 'Atención',
-            text: 'Debes capturar al menos un pedido con pago recibido mayor a $0'
+            text: 'Debes capturar al menos un documento con pago recibido mayor a $0'
         });
         return;
     }
 
-    // Validar que todos los pedidos sean del mismo tipo (requieren complemento o no)
+    // Un CFDI de pago solo puede relacionar facturas PPD, así que no se pueden mezclar en un
+    // mismo pago documentos que requieren complemento con los que no
     if (tieneConComplemento && tieneSinComplemento) {
         Swal.fire({
             type: 'warning',
             title: 'Atención',
-            text: 'No se puede registrar en un mismo pago pedidos facturados en PPD (requieren complemento de pago) junto con otros pedidos'
+            text: 'No se puede registrar en un mismo pago facturas PPD (requieren complemento de pago) junto con otros documentos'
         });
         return;
     }
