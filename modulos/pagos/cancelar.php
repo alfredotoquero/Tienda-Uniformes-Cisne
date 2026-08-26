@@ -11,6 +11,19 @@ $pago = $p->getPago(array(
 ));
 
 $motivoscancelacion = $sat->obtenerMotivosCancelacion()["motivoscancelacion"];
+
+// Cuando ya no hay CFDI que cancelar ante el SAT (el pago nunca se timbró, o su complemento
+// ya se canceló) este botón revierte el pago, y eso borra los tickets de caja que generó.
+// Solo en ese caso se muestra qué se va a eliminar
+$revierte = ($pago["result"] == "success") && (empty($pago["pago"]["uuid"]) || $pago["pago"]["status"] == 4);
+$tickets = $revierte ? $p->getTicketsPago($_GET["idpago"]) : array();
+
+$cortescerrados = false;
+foreach($tickets as $ticket){
+    if($ticket["statuscorte"] != "A"){
+        $cortescerrados = true;
+    }
+}
 ?>
 <div style="width:500px;">
     <?
@@ -35,6 +48,59 @@ $motivoscancelacion = $sat->obtenerMotivosCancelacion()["motivoscancelacion"];
             <label>Fecha</label><br>
             <?= $p->fecha_formateada($pago["fecha"], false) ?>
         </div>
+        <?
+        if($revierte){
+        ?>
+        <div class="form-group">
+            <label>Se revertirá</label>
+            <ul class="mb-0">
+                <li>El abono de cada pedido que cubrió este pago.</li>
+                <li>El saldo que su complemento amortizó a cada factura.</li>
+                <? if(!empty($tickets)){ ?>
+                <li>Los tickets de caja que generó, con sus formas de pago.</li>
+                <? } ?>
+            </ul>
+        </div>
+        <? if(!empty($tickets)){ ?>
+        <div class="form-group">
+            <label>Tickets de caja que se eliminarán</label>
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Ticket</th>
+                        <th>Sucursal</th>
+                        <th class="text-right">Monto</th>
+                        <th>Corte</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <? foreach($tickets as $ticket){ ?>
+                    <tr>
+                        <td>#<?= $ticket["folio"] ?></td>
+                        <td><?= $ticket["sucursal"] ?></td>
+                        <td class="text-right">$<?= number_format($ticket["total"],2) ?></td>
+                        <td><?= ($ticket["statuscorte"] == "A") ? "Abierto" : "Cerrado" ?></td>
+                    </tr>
+                    <? } ?>
+                </tbody>
+            </table>
+        </div>
+        <? } ?>
+        <? if($cortescerrados){ ?>
+        <div class="alert alert-warning">
+            <strong>Atención:</strong> uno o más de estos tickets pertenecen a un corte que ya fue cerrado y arqueado.
+            Al eliminarlos, el reporte de ese corte dejará de cuadrar contra el arqueo del día.
+        </div>
+        <? } ?>
+        <? if(empty($tickets)){ ?>
+        <div class="alert alert-warning">
+            <strong>Atención:</strong> no se encontró el ticket de caja asociado a este pago.
+            Se revertirán los pedidos y las facturas, pero el ticket tendrás que revisarlo manualmente.
+        </div>
+        <? } ?>
+        <?
+        }
+        ?>
         <div class="form-group">
             <label for="slcMotivoCancelacion">Motivo de cancelación<span>*</span></label>
             <select class="form-control" name="slcMotivoCancelacion" id="slcMotivoCancelacion" onchange="validarMotivoCancelacionPago()">
