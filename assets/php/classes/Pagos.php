@@ -93,7 +93,7 @@ class Pagos{
     /**
      * Determina, del lado del servidor, si un pago debe generar complemento de pago. No se
      * confía en la bandera que manda el navegador: se revisa si alguno de los pedidos que
-     * cubre el pago tiene facturas PPD vigentes con saldo pendiente.
+     * cubre el pago se asignó a facturas PPD vigentes con saldo pendiente.
      *
      * @param int $idpago
      * @return bool
@@ -107,13 +107,9 @@ class Pagos{
         from
             tformaspagopedido a
         join
-            ".$this->relacionPedidoFactura()." pf
-        on
-            pf.idpedido = a.idpedido
-        join
             tfacturas f
         on
-            f.idfactura = pf.idfactura
+            f.idfactura = a.idfactura
         where
             a.idpago = '".$idpago."' and
             f.idmetodopago = 1 and
@@ -156,7 +152,24 @@ class Pagos{
                 a.fecha,
                 a.uuid,
                 a.status,
-                exists (
+                -- Los pagos capturados con el desglose por documento dicen a qué factura
+                -- fue cada abono; los anteriores al desglose solo guardaron el pedido, así que
+                -- para esos se sigue resolviendo por las facturas del pedido
+                case when exists (
+                    select 1
+                    from tformaspagopedido fp
+                    where fp.idpago = a.idpago and fp.idfactura is not null
+                ) then exists (
+                    select 1
+                    from tformaspagopedido fp
+                    join tfacturas f on f.idfactura = fp.idfactura
+                    where fp.idpago = a.idpago
+                      and f.idmetodopago = 1
+                      and (f.status is null or f.status = 1)
+                      and f.uuid is not null
+                      and f.uuid <> ''
+                      and f.saldo > 0
+                ) else exists (
                     select 1
                     from tformaspagopedido fp
                     join ".$this->relacionPedidoFactura()." pf on pf.idpedido = fp.idpedido
@@ -167,7 +180,7 @@ class Pagos{
                       and f.uuid is not null
                       and f.uuid <> ''
                       and f.saldo > 0
-                ) as tiene_factura
+                ) end as tiene_factura
             from
                 tpagos a
             left join
@@ -207,7 +220,58 @@ class Pagos{
         }
     }
 
-    public function getPedidosCliente($post){
+    /**
+     * Devuelve el SQL del monto de un pago que ya se asignó a una factura pero que todavía no
+     * se refleja en su saldo. El saldo de tfacturas solo baja cuando se timbra el complemento
+     * (y en las facturas PUE nunca baja, porque no llevan complemento), así que sin este
+     * descuento un mismo saldo se podría cobrar dos veces.
+     *
+     * @param string $campofactura Expresión SQL con el idfactura contra el que se correlaciona
+     * @return string Subconsulta escalar con el monto asignado pendiente de reflejarse
+     */
+    private function montoAsignadoPendiente($campofactura){
+        return "
+                coalesce((
+                select
+                    sum(fp.monto)
+                from
+                    tformaspagopedido fp
+                left join
+                    tpagos p
+                on
+                    p.idpago = fp.idpago
+                where
+                    fp.idfactura = ".$campofactura." and
+                    (p.idpago is null or p.status <> 3) and
+                    not exists (
+                        select
+                            1
+                        from
+                            tpagosfacturas pgf
+                        where
+                            pgf.idpago = fp.idpago and
+                            pgf.idfactura = fp.idfactura
+                    )
+                ),0)";
+    }
+
+    /**
+     * Arma los renglones que se capturan al agregar un pago. Ya no es un renglón por pedido:
+     * cada documento por cobrar es su propio renglón, de modo que el vendedor decida a qué
+     * factura va cada peso en vez de que el sistema lo reparta solo.
+     *
+     * Por cada pedido con saldo del cliente se devuelve:
+     *   - un renglón por cada factura vigente del pedido (PPD o PUE) que aún tenga restante
+     *   - un renglón "Sin factura" por la parte del pedido que todavía no se ha facturado
+     *
+     * El restante de la parte no facturada se deduce del pedido (total - abonado) menos lo que
+     * siguen debiendo sus facturas, así que los renglones de un pedido nunca suman más de lo
+     * que el pedido debe.
+     *
+     * @param array $post   Contiene el cliente seleccionado y el vendedor
+     * @return array        Renglones por cobrar o un mensaje de error
+     */
+    public function getRenglonesPago($post){
         try{
             $idvendedor = mysqli_real_escape_string($this->con,$post["idvendedor"]);
             $cliente = mysqli_real_escape_string($this->con, substr($post["cliente"], strpos($post["cliente"], "-") + 1));
@@ -225,43 +289,12 @@ class Pagos{
                 throw new Exception("No se pudo recuperar la sucursal del vendedor");
             }
 
-            // Un pedido puede tener varias facturas (facturación parcial), así que no se puede
-            // depender de v.idfactura, que solo conserva la última. Se cuentan las facturas
-            // vigentes del pedido y, aparte, las PPD con saldo pendiente (las que obligan a
-            // timbrar un complemento de pago al recibir el abono).
             $query = "
             select
-                v.*,
-                (
-                select
-                    count(distinct f.idfactura)
-                from
-                    ".$this->relacionPedidoFactura()." pf
-                join
-                    tfacturas f
-                on
-                    f.idfactura = pf.idfactura
-                where
-                    pf.idpedido = v.idpedido and
-                    (f.status is null or f.status = 1)
-                ) as facturas,
-                (
-                select
-                    count(distinct f.idfactura)
-                from
-                    ".$this->relacionPedidoFactura()." pf
-                join
-                    tfacturas f
-                on
-                    f.idfactura = pf.idfactura
-                where
-                    pf.idpedido = v.idpedido and
-                    f.idmetodopago = 1 and
-                    (f.status is null or f.status = 1) and
-                    f.uuid is not null and
-                    f.uuid <> '' and
-                    f.saldo > 0
-                ) as facturasppd
+                v.idpedido,
+                v.fecha,
+                v.total,
+                v.abonado
             from
                 vpedidos v
             where
@@ -274,13 +307,110 @@ class Pagos{
                 v.idpedido";
             $result = mysqli_query($this->con,$query);
 
-            if(mysqli_num_rows($result)==0){
+            if(!$result || mysqli_num_rows($result)==0){
+                throw new Exception("No se encontraron resultados");
+            }
+
+            $pedidos = mysqli_fetch_all($result,MYSQLI_ASSOC);
+
+            $idspedidos = array_map(function($pedido){
+                return (int)$pedido["idpedido"];
+            },$pedidos);
+
+            // Facturas vigentes de esos pedidos con su restante por cobrar
+            $query = "
+            select distinct
+                pf.idpedido,
+                f.idfactura,
+                f.serie,
+                f.folio,
+                f.idmetodopago,
+                f.uuid,
+                f.total,
+                round(f.saldo - ".$this->montoAsignadoPendiente("f.idfactura").",2) as restante
+            from
+                ".$this->relacionPedidoFactura()." pf
+            join
+                tfacturas f
+            on
+                f.idfactura = pf.idfactura
+            where
+                pf.idpedido in (".implode(",",$idspedidos).") and
+                (f.status is null or f.status = 1)
+            order by
+                pf.idpedido,
+                f.idfactura";
+            $result = mysqli_query($this->con,$query);
+
+            $facturas = array();
+            foreach(($result) ? mysqli_fetch_all($result,MYSQLI_ASSOC) : array() as $factura){
+                $facturas[$factura["idpedido"]][] = $factura;
+            }
+
+            $renglones = array();
+
+            foreach($pedidos as $pedido){
+                $idpedido = $pedido["idpedido"];
+                $restantepedido = round(floatval($pedido["total"]) - floatval($pedido["abonado"]),2);
+
+                if($restantepedido < 0.01){
+                    continue;
+                }
+
+                $restantefacturas = 0;
+                $renglonespedido = array();
+
+                foreach((isset($facturas[$idpedido]) ? $facturas[$idpedido] : array()) as $factura){
+                    $restante = round(floatval($factura["restante"]),2);
+
+                    if($restante < 0.01){
+                        continue;
+                    }
+
+                    $restantefacturas = round($restantefacturas + $restante,2);
+
+                    // Solo las PPD vigentes con saldo obligan a timbrar complemento de pago
+                    $ppd = ($factura["idmetodopago"] == 1 && !empty($factura["uuid"]));
+
+                    $renglonespedido[] = array(
+                        "idpedido" => $idpedido,
+                        "idfactura" => $factura["idfactura"],
+                        "documento" => trim($factura["serie"]."-".$factura["folio"]," -"),
+                        "ppd" => ($ppd) ? 1 : 0,
+                        "totaldocumento" => round(floatval($factura["total"]),2),
+                        "restante" => $restante,
+                        "fecha" => $pedido["fecha"],
+                        "restantepedido" => $restantepedido
+                    );
+                }
+
+                // Lo que el pedido debe por encima de lo que deben sus facturas es la parte que
+                // todavía no está facturada
+                $sinfacturar = round($restantepedido - $restantefacturas,2);
+
+                if($sinfacturar >= 0.01){
+                    $renglonespedido[] = array(
+                        "idpedido" => $idpedido,
+                        "idfactura" => 0,
+                        "documento" => "Sin factura",
+                        "ppd" => 0,
+                        "totaldocumento" => $sinfacturar,
+                        "restante" => $sinfacturar,
+                        "fecha" => $pedido["fecha"],
+                        "restantepedido" => $restantepedido
+                    );
+                }
+
+                $renglones = array_merge($renglones,$renglonespedido);
+            }
+
+            if(empty($renglones)){
                 throw new Exception("No se encontraron resultados");
             }
 
             $respuesta = array(
                 "result" => "success",
-                "pedidos" => mysqli_fetch_all($result,MYSQLI_ASSOC)
+                "renglones" => $renglones
             );
         }catch(Exception $e){
             $respuesta = array(
@@ -383,9 +513,11 @@ class Pagos{
      *  - string "cliente"      ID y nombre del cliente en formato "ID-NOMBRE"
      *  - string "idformapago"  ID de la forma de pago
      *  - string "fecha"        Fecha del pago (formato yyyy-mm-dd)
-     *  - array  "pedidos"      Arreglo de pedidos, cada uno con:
+     *  - array  "pedidos"      Arreglo de renglones capturados, cada uno con:
      *      - string "idpedido"   ID del pedido
-     *      - float  "monto"      Monto del pago para el pedido
+     *      - string "idfactura"  ID de la factura a la que se aplica el abono, 0 si se aplica
+     *                            a la parte del pedido que aún no está facturada
+     *      - float  "monto"      Monto del pago para ese documento
      * @return array Respuesta con:
      *  - bool   "success"              Indica si el pago se registró correctamente
      *  - string "message"              Mensaje descriptivo del resultado
@@ -398,10 +530,90 @@ class Pagos{
             $nombreCliente = mysqli_real_escape_string($this->con, substr(strstr($post["cliente"], "-"), 1));
             $idformapago = mysqli_real_escape_string($this->con,$post["idformapago"]);
             $fecha = mysqli_real_escape_string($this->con,$post["fecha"]);
-            $total = mysqli_real_escape_string($this->con,$post["total"]);
 
             $idcliente_sql = ($idcliente == 0) ? "NULL" : "'".$idcliente."'";
             $cliente_sql = ($idcliente == 0) ? "'".$nombreCliente."'" : "NULL";
+
+            // Cada renglón capturado es un documento por cobrar: una factura del pedido o
+            // (idfactura = 0) la parte del pedido que todavía no se ha facturado
+            $renglones = [];
+            if(isset($post["pedidos"]) && is_array($post["pedidos"])){
+                foreach($post["pedidos"] as $renglon){
+                    $monto = round(floatval($renglon["monto"]),2);
+                    if($monto > 0){
+                        $renglones[] = array(
+                            "idpedido" => (int)$renglon["idpedido"],
+                            "idfactura" => (int)(isset($renglon["idfactura"]) ? $renglon["idfactura"] : 0),
+                            "monto" => $monto
+                        );
+                    }
+                }
+            }
+
+            if(empty($renglones)){
+                throw new Exception("No se recibieron pedidos con monto mayor a 0");
+            }
+
+            // Se revalida contra la base lo que mandó el navegador: que los documentos sigan
+            // siendo del cliente y que ningún monto rebase lo que ese documento debe
+            $disponibles = $this->getRenglonesPago(array(
+                "idvendedor" => $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"],
+                "cliente" => $post["cliente"]
+            ));
+
+            if($disponibles["result"] != "success"){
+                throw new Exception($disponibles["mensaje"]);
+            }
+
+            $restantes = array();
+            $restantespedido = array();
+            foreach($disponibles["renglones"] as $disponible){
+                $restantes[$disponible["idpedido"]."-".$disponible["idfactura"]] = $disponible["restante"];
+                $restantespedido[$disponible["idpedido"]] = $disponible["restantepedido"];
+            }
+
+            // Los efectos sobre el pedido (ticket, abonado, statuspago) siguen siendo uno por
+            // pedido, aunque el abono se haya desglosado en varios documentos
+            $pedidos = array();
+            $capturadodocumento = array();
+            $total = 0;
+
+            foreach($renglones as $renglon){
+                $idpedido = $renglon["idpedido"];
+                $clave = $idpedido."-".$renglon["idfactura"];
+
+                if(!isset($restantes[$clave])){
+                    throw new Exception("El documento capturado del pedido ".$idpedido." ya no está disponible, vuelve a seleccionar el cliente");
+                }
+
+                $capturadodocumento[$clave] = round((isset($capturadodocumento[$clave]) ? $capturadodocumento[$clave] : 0) + $renglon["monto"],2);
+
+                if($capturadodocumento[$clave] > $restantes[$clave] + 0.01){
+                    throw new Exception("El monto capturado para el pedido ".$idpedido." rebasa el restante del documento ($".number_format($restantes[$clave],2).")");
+                }
+
+                if(!isset($pedidos[$idpedido])){
+                    $pedidos[$idpedido] = array(
+                        "idpedido" => $idpedido,
+                        "monto" => 0,
+                        "documentos" => array()
+                    );
+                }
+
+                $pedidos[$idpedido]["monto"] = round($pedidos[$idpedido]["monto"] + $renglon["monto"],2);
+                $pedidos[$idpedido]["documentos"][] = $renglon;
+
+                // Red de seguridad: la suma de los documentos de un pedido no puede rebasar lo
+                // que resta del pedido, aunque cada documento por separado cuadre
+                if($pedidos[$idpedido]["monto"] > $restantespedido[$idpedido] + 0.01){
+                    throw new Exception("El monto capturado para el pedido ".$idpedido." rebasa lo que resta del pedido ($".number_format($restantespedido[$idpedido],2).")");
+                }
+
+                $total = round($total + $renglon["monto"],2);
+            }
+
+            $pedidos = array_values($pedidos);
+            $total = mysqli_real_escape_string($this->con,sprintf("%.2f",$total));
 
             // Iniciar transacción
             mysqli_begin_transaction($this->con);
@@ -434,23 +646,6 @@ class Pagos{
                 throw new Exception("Error al insertar el registro de pago");
             }
             $idpago = mysqli_insert_id($this->con);
-
-            $pedidos = [];
-            if(isset($post["pedidos"]) && is_array($post["pedidos"])){
-                foreach($post["pedidos"] as $pedido){
-                    $monto = floatval($pedido["monto"]);
-                    if($monto > 0){
-                        $pedidos[] = array(
-                            "idpedido" => mysqli_real_escape_string($this->con,$pedido["idpedido"]),
-                            "monto" => $monto
-                        );
-                    }
-                }
-            }
-
-            if(empty($pedidos)){
-                throw new Exception("No se recibieron pedidos con monto mayor a 0");
-            }
 
             // Obtener datos del vendedor
             $idvendedor = $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"];
@@ -562,30 +757,39 @@ class Pagos{
                     throw new Exception("Error al registrar la forma de pago del ticket para el pedido ".$idpedido);
                 }
 
-                // Insertar en tformaspagopedido
-                $query = "
-                insert
-                into
-                    tformaspagopedido
-                (
-                    idpedido,
-                    idpago,
-                    idvendedor,
-                    idformapago,
-                    monto,
-                    montorecibido,
-                    fecha
-                ) values (
-                    '".$idpedido."',
-                    '".$idpago."',
-                    '".$vendedor["idvendedor"]."',
-                    '".$idformapago."',
-                    '".$monto."',
-                    '".$monto."',
-                    '".$fecha."'
-                )";
-                if(!mysqli_query($this->con,$query)){
-                    throw new Exception("Error al registrar la forma de pago del pedido ".$idpedido);
+                // Insertar en tformaspagopedido un renglón por documento cobrado. Aquí queda
+                // guardada la asignación que capturó el vendedor, que es la que después usa el
+                // complemento de pago para relacionar las facturas
+                foreach($pedido["documentos"] as $documento){
+                    $montodocumento = sprintf("%.2f",$documento["monto"]);
+                    $idfactura_sql = ($documento["idfactura"] > 0) ? "'".$documento["idfactura"]."'" : "NULL";
+
+                    $query = "
+                    insert
+                    into
+                        tformaspagopedido
+                    (
+                        idpedido,
+                        idfactura,
+                        idpago,
+                        idvendedor,
+                        idformapago,
+                        monto,
+                        montorecibido,
+                        fecha
+                    ) values (
+                        '".$idpedido."',
+                        ".$idfactura_sql.",
+                        '".$idpago."',
+                        '".$vendedor["idvendedor"]."',
+                        '".$idformapago."',
+                        '".$montodocumento."',
+                        '".$montodocumento."',
+                        '".$fecha."'
+                    )";
+                    if(!mysqli_query($this->con,$query)){
+                        throw new Exception("Error al registrar la forma de pago del pedido ".$idpedido);
+                    }
                 }
 
                 // Actualizar abonado en tpedidos
@@ -716,6 +920,266 @@ class Pagos{
         }
     }
 
+    /**
+     * Obtiene una factura PPD vigente y con saldo pendiente por su ID, con los datos fiscales
+     * que necesita el complemento de pago. Devuelve null si la factura no aplica para
+     * complemento (no es PPD, está cancelada, no está timbrada o ya no tiene saldo).
+     *
+     * @param int $idfactura
+     * @return array|null
+     */
+    private function getFacturaPPD($idfactura){
+        $idfactura = mysqli_real_escape_string($this->con,$idfactura);
+
+        $query = "
+        select
+            f.idfactura,
+            f.serie,
+            f.folio,
+            f.uuid,
+            f.saldo,
+            f.idemisor,
+            f.idrazonsocial,
+            f.razonsocial,
+            f.rfc,
+            f.codigo_postal,
+            f.regimenfiscal,
+            round((f.iva/f.subtotal)*100,0) as impuesto
+        from
+            tfacturas f
+        where
+            f.idfactura = '".$idfactura."' and
+            f.idmetodopago = 1 and
+            (f.status is null or f.status = 1) and
+            f.uuid is not null and
+            f.uuid <> '' and
+            f.saldo > 0";
+        $result = mysqli_query($this->con,$query);
+
+        return ($result && mysqli_num_rows($result) > 0) ? mysqli_fetch_assoc($result) : null;
+    }
+
+    /**
+     * Número de parcialidad que le toca a un complemento sobre una factura: cuántos
+     * complementos vigentes la han amortizado antes, más uno. Se cuenta por factura, no por
+     * pedido, porque así lo pide el CFDI de pagos.
+     *
+     * @param int $idfactura
+     * @param int $idpago       Pago que se está timbrando, se excluye del conteo
+     * @return int
+     */
+    private function parcialidadFactura($idfactura,$idpago){
+        $idfactura = mysqli_real_escape_string($this->con,$idfactura);
+        $idpago = mysqli_real_escape_string($this->con,$idpago);
+
+        $query = "
+        select
+            count(*) + 1 as parcialidad
+        from
+            tpagosfacturas a
+        join
+            tpagos b
+        on
+            b.idpago = a.idpago
+        where
+            a.idfactura = '".$idfactura."' and
+            a.idpago <> '".$idpago."' and
+            b.status <> 3";
+
+        return mysqli_fetch_assoc(mysqli_query($this->con, $query))["parcialidad"];
+    }
+
+    /**
+     * Resuelve qué facturas amortiza un pago y con cuánto cada una, junto con la tienda del
+     * pedido (para el logo del correo).
+     *
+     * La asignación la captura el vendedor documento por documento al registrar el pago y vive
+     * en tformaspagopedido.idfactura, así que aquí solo se lee: el sistema ya no decide a qué
+     * factura va el dinero. Los pagos registrados antes del desglose por documento no traen
+     * esa asignación; para esos, y solo para esos, se conserva el reparto automático de la
+     * factura más antigua a la más reciente.
+     *
+     * @param int $idpago
+     * @return array array("facturas" => array, "idtienda" => int)
+     */
+    private function facturasComplemento($idpago){
+        $idpago = mysqli_real_escape_string($this->con,$idpago);
+
+        $query = "
+        select
+            a.idpedido,
+            a.idfactura,
+            sum(a.monto) as monto
+        from
+            tformaspagopedido a
+        where
+            a.idpago = '".$idpago."'
+        group by
+            a.idpedido,
+            a.idfactura
+        order by
+            a.idpedido,
+            a.idfactura";
+        $result = mysqli_query($this->con,$query);
+
+        if(!$result || mysqli_num_rows($result)==0){
+            throw new Exception("No se pudo recuperar la información de los pagos");
+        }
+
+        $aplicaciones = mysqli_fetch_all($result,MYSQLI_ASSOC);
+
+        $query = "
+        select
+            idtienda
+        from
+            vpedidos
+        where
+            idpedido = '".$aplicaciones[0]["idpedido"]."'";
+        $idtienda = mysqli_fetch_assoc(mysqli_query($this->con, $query))["idtienda"];
+
+        $asignadas = array_filter($aplicaciones,function($aplicacion){
+            return $aplicacion["idfactura"] > 0;
+        });
+
+        $facturas = (!empty($asignadas))
+            ? $this->facturasAsignadas($idpago,$asignadas)
+            : $this->facturasReparto($idpago,$aplicaciones);
+
+        return array(
+            "facturas" => $facturas,
+            "idtienda" => $idtienda
+        );
+    }
+
+    /**
+     * Arma los documentos relacionados del complemento a partir de la asignación que capturó
+     * el vendedor. Los renglones que no correspondan a una factura PPD vigente con saldo (los
+     * abonos a la parte no facturada del pedido o a facturas PUE) simplemente no se relacionan.
+     *
+     * @param int   $idpago
+     * @param array $asignadas   Renglones de tformaspagopedido con idfactura
+     * @return array
+     */
+    private function facturasAsignadas($idpago,$asignadas){
+        $facturas = array();
+
+        foreach($asignadas as $aplicacion){
+            $idfactura = $aplicacion["idfactura"];
+            $monto = round(floatval($aplicacion["monto"]), 2);
+
+            if($monto < 0.01){
+                continue;
+            }
+
+            // Si dos pedidos del mismo pago abonaron a la misma factura, se acumulan en un
+            // solo documento relacionado
+            if(isset($facturas[$idfactura])){
+                $facturas[$idfactura]["monto"] = round($facturas[$idfactura]["monto"] + $monto, 2);
+                continue;
+            }
+
+            $factura = $this->getFacturaPPD($idfactura);
+
+            if($factura === null){
+                continue;
+            }
+
+            $facturas[$idfactura] = array(
+                "idfactura" => $idfactura,
+                "monto" => $monto,
+                "saldo" => round(floatval($factura["saldo"]), 2),
+                "uuid" => $factura["uuid"],
+                "serie" => $factura["serie"],
+                "folio" => $factura["folio"],
+                "idemisor" => $factura["idemisor"],
+                "idrazonsocial" => $factura["idrazonsocial"],
+                "razonsocial" => $factura["razonsocial"],
+                "rfc" => $factura["rfc"],
+                "codigo_postal" => $factura["codigo_postal"],
+                "regimenfiscal" => $factura["regimenfiscal"],
+                "parcialidad" => $this->parcialidadFactura($idfactura,$idpago),
+                "impuesto" => $factura["impuesto"]
+            );
+        }
+
+        // Nunca se puede amortizar más de lo que la factura debe, aunque la captura lo diga
+        foreach($facturas as $idfactura => $factura){
+            if($factura["monto"] > $factura["saldo"]){
+                $facturas[$idfactura]["monto"] = $factura["saldo"];
+            }
+        }
+
+        return array_values($facturas);
+    }
+
+    /**
+     * Reparto automático del abono entre las facturas PPD del pedido, de la más antigua a la
+     * más reciente. Solo se usa con los pagos anteriores al desglose por documento, que no
+     * guardaron a qué factura iba cada peso.
+     *
+     * @param int   $idpago
+     * @param array $aplicaciones   Renglones de tformaspagopedido agrupados por pedido
+     * @return array
+     */
+    private function facturasReparto($idpago,$aplicaciones){
+        $facturas = array();
+        $saldosdisponibles = array();
+        $montospedido = array();
+
+        foreach($aplicaciones as $aplicacion){
+            $idpedido = $aplicacion["idpedido"];
+            $montospedido[$idpedido] = round((isset($montospedido[$idpedido]) ? $montospedido[$idpedido] : 0) + floatval($aplicacion["monto"]), 2);
+        }
+
+        foreach($montospedido as $idpedido => $porAplicar){
+            foreach($this->getFacturasPPDPedido($idpedido) as $factura){
+                if($porAplicar < 0.01){
+                    break;
+                }
+
+                $idfactura = $factura["idfactura"];
+                $saldo = round(floatval($factura["saldo"]), 2);
+
+                // El saldo disponible se lleva en memoria para el caso (raro) de que dos
+                // pedidos del mismo pago compartan factura: así no se relaciona más de lo
+                // que la factura debe
+                $disponible = isset($saldosdisponibles[$idfactura]) ? $saldosdisponibles[$idfactura] : $saldo;
+                $aplicado = round(min($porAplicar, $disponible), 2);
+
+                if($aplicado < 0.01){
+                    continue;
+                }
+
+                $porAplicar = round($porAplicar - $aplicado, 2);
+                $saldosdisponibles[$idfactura] = round($disponible - $aplicado, 2);
+
+                if(isset($facturas[$idfactura])){
+                    $facturas[$idfactura]["monto"] = round($facturas[$idfactura]["monto"] + $aplicado, 2);
+                    continue;
+                }
+
+                $facturas[$idfactura] = array(
+                    "idfactura" => $idfactura,
+                    "monto" => $aplicado,
+                    "saldo" => $saldo,
+                    "uuid" => $factura["uuid"],
+                    "serie" => $factura["serie"],
+                    "folio" => $factura["folio"],
+                    "idemisor" => $factura["idemisor"],
+                    "idrazonsocial" => $factura["idrazonsocial"],
+                    "razonsocial" => $factura["razonsocial"],
+                    "rfc" => $factura["rfc"],
+                    "codigo_postal" => $factura["codigo_postal"],
+                    "regimenfiscal" => $factura["regimenfiscal"],
+                    "parcialidad" => $this->parcialidadFactura($idfactura,$idpago),
+                    "impuesto" => $factura["impuesto"]
+                );
+            }
+        }
+
+        return array_values($facturas);
+    }
+
     public function generarComplementoPago($post){
         try{
             $idpago = mysqli_real_escape_string($this->con, $post["idpago"]);
@@ -756,113 +1220,11 @@ class Pagos{
             $fecha = substr($pago["fecha"], 0, 10);
             $totalpago = floatval($pago["total"]);
 
-            // Obtenemos los pedidos que cubrió el pago con el monto aplicado a cada uno
-            $query = "
-            select
-                a.idpedido,
-                sum(a.monto) as monto
-            from
-                tformaspagopedido a
-            where
-                a.idpago = '".$idpago."'
-            group by
-                a.idpedido
-            order by
-                a.idpedido";
-            $result = mysqli_query($this->con,$query);
-
-            if(!$result || mysqli_num_rows($result)==0){
-                throw new Exception("No se pudo recuperar la información de los pagos");
-            }
-
-            $pedidos = mysqli_fetch_all($result,MYSQLI_ASSOC);
-
-            // Cada pedido puede tener varias facturas PPD (facturación parcial), así que el
-            // monto abonado se reparte entre ellas de la más antigua a la más reciente, sin
-            // rebasar el saldo de cada una. La parte que no corresponda a ninguna factura
-            // (lo que aún no se ha facturado del pedido) simplemente no se relaciona.
-            $facturas = [];
-            $saldosdisponibles = [];
-            $idtienda = null;
-
-            foreach($pedidos as $pedido){
-                $porAplicar = round(floatval($pedido["monto"]), 2);
-
-                if($idtienda === null){
-                    $query = "
-                    select
-                        idtienda
-                    from
-                        vpedidos
-                    where
-                        idpedido = '".$pedido["idpedido"]."'";
-                    $idtienda = mysqli_fetch_assoc(mysqli_query($this->con, $query))["idtienda"];
-                }
-
-                foreach($this->getFacturasPPDPedido($pedido["idpedido"]) as $factura){
-                    if($porAplicar < 0.01){
-                        break;
-                    }
-
-                    $idfactura = $factura["idfactura"];
-                    $saldo = round(floatval($factura["saldo"]), 2);
-
-                    // El saldo disponible se lleva en memoria para el caso (raro) de que dos
-                    // pedidos del mismo pago compartan factura: así no se relaciona más de lo
-                    // que la factura debe
-                    $disponible = isset($saldosdisponibles[$idfactura]) ? $saldosdisponibles[$idfactura] : $saldo;
-                    $aplicado = round(min($porAplicar, $disponible), 2);
-
-                    if($aplicado < 0.01){
-                        continue;
-                    }
-
-                    $porAplicar = round($porAplicar - $aplicado, 2);
-                    $saldosdisponibles[$idfactura] = round($disponible - $aplicado, 2);
-
-                    // Si dos pedidos comparten factura, se acumula en un solo documento relacionado
-                    if(isset($facturas[$idfactura])){
-                        $facturas[$idfactura]["monto"] = round($facturas[$idfactura]["monto"] + $aplicado, 2);
-                        continue;
-                    }
-
-                    // La parcialidad se cuenta por factura (cuántos complementos la han
-                    // amortizado antes), no por pedido
-                    $query = "
-                    select
-                        count(*) + 1 as parcialidad
-                    from
-                        tpagosfacturas a
-                    join
-                        tpagos b
-                    on
-                        b.idpago = a.idpago
-                    where
-                        a.idfactura = '".$idfactura."' and
-                        a.idpago <> '".$idpago."' and
-                        b.status <> 3";
-                    $parcialidad = mysqli_fetch_assoc(mysqli_query($this->con, $query))["parcialidad"];
-
-                    $facturas[$idfactura] = array(
-                        "idfactura" => $idfactura,
-                        "monto" => $aplicado,
-                        "saldo" => $saldo,
-                        "uuid" => $factura["uuid"],
-                        "serie" => $factura["serie"],
-                        "folio" => $factura["folio"],
-                        "idemisor" => $factura["idemisor"],
-                        "idrazonsocial" => $factura["idrazonsocial"],
-                        "razonsocial" => $factura["razonsocial"],
-                        "rfc" => $factura["rfc"],
-                        "codigo_postal" => $factura["codigo_postal"],
-                        "regimenfiscal" => $factura["regimenfiscal"],
-                        "parcialidad" => $parcialidad,
-                        "impuesto" => $factura["impuesto"]
-                    );
-                }
-            }
-
-            $facturas = array_values($facturas);
+            // La asignación factura por factura la capturó el vendedor al registrar el pago;
+            // aquí solo se lee para armar los documentos relacionados del complemento
+            $resolucion = $this->facturasComplemento($idpago);
+            $facturas = $resolucion["facturas"];
+            $idtienda = $resolucion["idtienda"];
 
             if(empty($facturas)){
                 throw new Exception("El pago no corresponde a facturas PPD con saldo pendiente, por lo que no requiere complemento");
@@ -1147,7 +1509,7 @@ class Pagos{
                     // El complemento solo puede relacionar la parte facturada del abono; si
                     // sobró monto (pedido facturado parcialmente) hay que decirlo
                     if(round($totalpago - $total, 2) > 0){
-                        $mensajeCorreo .= ". Se relacionaron $".number_format($total,2)." de los $".number_format($totalpago,2)." del pago, el resto corresponde a la parte del pedido que aún no está facturada";
+                        $mensajeCorreo .= ". Se relacionaron $".number_format($total,2)." de los $".number_format($totalpago,2)." del pago, el resto se aplicó a documentos que no llevan complemento (facturas PUE o la parte del pedido que aún no está facturada)";
                     }
 
                     // Se guardan los documentos en la carpeta específica
