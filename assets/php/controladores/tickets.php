@@ -20,6 +20,13 @@ try{
                 $respuesta = $arrayerror;
             }
         break;
+        case "cambiarformapago":
+            if($_POST["authToken"]==$_SESSION["authToken"]){
+                $respuesta = $claseTickets->cambiarFormaPagoTicket($_POST);
+            }else{
+                $respuesta = $arrayerror;
+            }
+        break;
         default: $respuesta = $arrayerror; break;
     }
     

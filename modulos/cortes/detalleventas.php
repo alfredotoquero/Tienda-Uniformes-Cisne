@@ -81,6 +81,9 @@ function imprimir(idcuenta) {
                                     $tipoimpresion = 4;
                                 }
                                 $nombrevendedor = mysqli_fetch_assoc(mysqli_query($con,"select * from tvendedores where idvendedor='".$ticket["idvendedor"]."'"))["nombre"];
+                                // Un desglose reasignado a mano ya no corresponde a lo que se capturó en la venta,
+                                // así que la fila se marca para que quien revisa el corte sepa dónde mirar
+                                $cambiosformapago = mysqli_fetch_assoc(mysqli_query($con,"select count(*) as total from tformaspagoticket_log where idticket='".$ticket["idticket"]."'"))["total"];
                                 ?>
                                 <tr id="<? echo $ticket["idticket"]; ?>">
                                     <td><? echo $ticket["folio"]; ?></td>
@@ -225,6 +228,9 @@ function imprimir(idcuenta) {
                                             echo "Cheque: $" . number_format($cheque,2);
                                         }
                                     }
+                                    if ($cambiosformapago>0) {
+                                        echo '<br><span class="badge badge-info">MODIFICADO</span>';
+                                    }
                                     ?>
                                     </td>
                                     <td><? echo fecha_formateada($ticket["fecha"]); ?></td>
@@ -253,6 +259,9 @@ function imprimir(idcuenta) {
                                             <button type="button" class="btn white" data-toggle="dropdown" aria-expanded="false">Opciones <span class="caret"></span></button>
                                             <ul class="dropdown-menu" x-placement="bottom-start" style="position: absolute; transform: translate3d(0px, 33px, 0px); top: 0px; left: 0px; will-change: transform;">
                                                 <a href="javascript:;" onClick="imprimirTicket(<? echo $ticket["idticket"]; ?>,0,<? echo $tipoimpresion; ?>)"><li class="dropdown-item">Imprimir</li></a>
+                                                <? if(!$facturaviva){ ?>
+                                                <a href="javascript:;" data-fancybox data-type="ajax" data-src="/modulos/cortes/cambiarformapago.php?idticket=<? echo $ticket['idticket']; ?>"><li class="dropdown-item">Cambiar forma de pago</li></a>
+                                                <? } ?>
                                                 <? if($tipocuenta!=""){ ?>
                                                 <a href="?modulo1=cortes&modulo2=detallev&modulo3=detallecuenta&idticket=<? echo $ticket["idticket"]; ?>&idcuenta=<? echo $ticket["idcuenta"]; ?>&idcorte=<? echo $_GET["idcorte"]; ?>"><li class="dropdown-item">Ver detalle</li></a>
                                                 <? if($tipocuenta!="" && !empty($ticket["idcuenta"]) && !$facturaviva){ ?>
