@@ -442,6 +442,377 @@ class Tickets{
         }
     }
 
+    // La tarjeta de regalo descuenta saldo de ttarjetasregalo contra un código, así que su
+    // partida no se puede reasignar sin dejar ese saldo huérfano. Las formas con pesos != 1
+    // (Efectivo USD) tampoco: su monto está en divisa y reasignarlas descuadraría el corte.
+    const FORMAPAGO_TARJETAREGALO = 4;
+
+    /**
+     * Formas de pago que se pueden elegir como destino al reasignar una partida: solo las
+     * que se capturan en pesos y no dependen de un saldo externo.
+     */
+    public function obtenerFormasPagoReasignables(){
+        try{
+            $query = "
+            select
+                *
+            from
+                tcatformaspago
+            where
+                pesos = 1 and
+                idformapago != ".self::FORMAPAGO_TARJETAREGALO."
+            order by
+                idformapago";
+            $result = mysqli_query($this->con,$query);
+
+            $formaspago = array();
+            while($row = mysqli_fetch_assoc($result)){
+                $formaspago[] = $row;
+            }
+
+            $respuesta = array(
+                "respuesta" => "OK",
+                "formaspago" => $formaspago
+            );
+
+        }catch(Exception $e){
+            $respuesta = array(
+                "respuesta" => "ERROR",
+                "mensaje" => $e->getMessage()
+            );
+        }finally{
+            return $respuesta;
+        }
+    }
+
+    /**
+     * Partidas de pago de un ticket. Se marca cada una con "editable" para que el formulario
+     * pinte un select o un texto fijo sin tener que repetir la regla en la vista.
+     */
+    public function obtenerFormasPagoTicket($post){
+        try{
+            $idticket = mysqli_real_escape_string($this->con,$post["idticket"]);
+
+            $query = "
+            select
+                a.idformapagoticket,
+                a.idformapago,
+                a.monto,
+                a.archivo,
+                b.nombre,
+                b.pesos
+            from
+                tformaspagoticket a
+            left join
+                tcatformaspago b
+            on
+                b.idformapago = a.idformapago
+            where
+                a.idticket = '".$idticket."'
+            order by
+                a.idformapagoticket";
+            $result = mysqli_query($this->con,$query);
+
+            $partidas = array();
+            while($row = mysqli_fetch_assoc($result)){
+                $row["editable"] = ($row["pesos"]==1 && $row["idformapago"]!=self::FORMAPAGO_TARJETAREGALO);
+                $partidas[] = $row;
+            }
+
+            $respuesta = array(
+                "respuesta" => "OK",
+                "partidas" => $partidas
+            );
+
+        }catch(Exception $e){
+            $respuesta = array(
+                "respuesta" => "ERROR",
+                "mensaje" => $e->getMessage()
+            );
+        }finally{
+            return $respuesta;
+        }
+    }
+
+    /**
+     * Bitácora de reasignaciones de un ticket, de la más reciente a la más antigua.
+     */
+    public function obtenerBitacoraFormasPago($post){
+        try{
+            $idticket = mysqli_real_escape_string($this->con,$post["idticket"]);
+
+            $query = "
+            select
+                a.monto,
+                a.archivoeliminado,
+                a.fecha,
+                b.nombre as formapagoanterior,
+                c.nombre as formapagonuevo,
+                d.nombre as vendedor
+            from
+                tformaspagoticket_log a
+            left join
+                tcatformaspago b
+            on
+                b.idformapago = a.idformapagoanterior
+            left join
+                tcatformaspago c
+            on
+                c.idformapago = a.idformapagonuevo
+            left join
+                tvendedores d
+            on
+                d.idvendedor = a.idvendedor
+            where
+                a.idticket = '".$idticket."'
+            order by
+                a.idlog desc";
+            $result = mysqli_query($this->con,$query);
+
+            $movimientos = array();
+            while($row = mysqli_fetch_assoc($result)){
+                $movimientos[] = $row;
+            }
+
+            $respuesta = array(
+                "respuesta" => "OK",
+                "movimientos" => $movimientos
+            );
+
+        }catch(Exception $e){
+            $respuesta = array(
+                "respuesta" => "ERROR",
+                "mensaje" => $e->getMessage()
+            );
+        }finally{
+            return $respuesta;
+        }
+    }
+
+    /**
+     * Reasigna la forma de pago de una o varias partidas de un ticket sin tocar los montos:
+     * el total del ticket no cambia, solo se mueve de una columna del corte a otra.
+     */
+    public function cambiarFormaPagoTicket($post){
+        try{
+            $idticket = mysqli_real_escape_string($this->con,$post["idticket"]);
+            $idusuario = mysqli_real_escape_string($this->con,$post["idusuario"]);
+            $seleccion = (isset($post["formapago"]) && is_array($post["formapago"])) ? $post["formapago"] : array();
+
+            // El estado pudo cambiar desde que se abrió el modal, así que se vuelve a validar
+            // aquí: si mientras tanto se timbró una factura, el desglose ya viajó en el CFDI
+            // y moverlo lo desincroniza.
+            $query = "
+            select
+                a.idticket,
+                a.idcorte,
+                a.idfactura,
+                b.status as factura_status,
+                c.status as corte_status
+            from
+                ttickets a
+            left join
+                tfacturas b
+            on
+                b.idfactura = a.idfactura
+            left join
+                tcortessucursales c
+            on
+                c.idcorte = a.idcorte
+            where
+                a.idticket = '".$idticket."'";
+            $result = mysqli_query($this->con,$query);
+
+            if(mysqli_num_rows($result)==0){
+                throw new Exception("No se pudo recuperar la información del ticket");
+            }
+
+            $ticket = mysqli_fetch_assoc($result);
+
+            if(!empty($ticket["idfactura"]) && $ticket["factura_status"] != 3){
+                throw new Exception("Este ticket tiene una factura vigente. Para cambiar la forma de pago primero debes cancelarla.");
+            }
+
+            $partidas = $this->obtenerFormasPagoTicket(array("idticket" => $idticket));
+            if($partidas["respuesta"]!="OK"){
+                throw new Exception($partidas["mensaje"]);
+            }
+
+            $destinos = array();
+            foreach($this->obtenerFormasPagoReasignables()["formaspago"] as $formapago){
+                $destinos[$formapago["idformapago"]] = $formapago["nombre"];
+            }
+
+            $afectadas = array();
+            $cambios = 0;
+
+            foreach($partidas["partidas"] as $partida){
+                $idformapagoticket = $partida["idformapagoticket"];
+
+                if(!isset($seleccion[$idformapagoticket])){
+                    continue;
+                }
+
+                $idformapagonuevo = mysqli_real_escape_string($this->con,$seleccion[$idformapagoticket]);
+
+                if($idformapagonuevo == $partida["idformapago"]){
+                    continue;
+                }
+
+                if(!$partida["editable"]){
+                    throw new Exception("La partida de ".$partida["nombre"]." no se puede reasignar");
+                }
+
+                if(!isset($destinos[$idformapagonuevo])){
+                    throw new Exception("La forma de pago seleccionada no es válida para una reasignación");
+                }
+
+                // El comprobante pertenece a la forma de pago original (transferencia, cheque
+                // o depósito); al reasignar la partida deja de respaldar nada, así que se borra
+                // el archivo y se limpia la columna.
+                $archivo = $partida["archivo"];
+
+                $query = "
+                update
+                    tformaspagoticket
+                set
+                    idformapago = '".$idformapagonuevo."',
+                    archivo = ''
+                where
+                    idformapagoticket = '".$idformapagoticket."'";
+                mysqli_query($this->con,$query);
+
+                if(!empty($archivo)){
+                    $ruta = $_SERVER["DOCUMENT_ROOT"]."/imagenes/depositos/".$idticket."/".basename($archivo);
+                    if(is_file($ruta)){
+                        unlink($ruta);
+                    }
+                }
+
+                $query = "
+                insert
+                into
+                    tformaspagoticket_log
+                (
+                    idformapagoticket,
+                    idticket,
+                    idcorte,
+                    idformapagoanterior,
+                    idformapagonuevo,
+                    monto,
+                    archivoeliminado,
+                    idvendedor,
+                    fecha
+                ) values (
+                    '".$idformapagoticket."',
+                    '".$idticket."',
+                    '".$ticket["idcorte"]."',
+                    '".$partida["idformapago"]."',
+                    '".$idformapagonuevo."',
+                    '".$partida["monto"]."',
+                    '".mysqli_real_escape_string($this->con,$archivo)."',
+                    '".$idusuario."',
+                    '".date("Y-m-d H:i:s")."'
+                )";
+                mysqli_query($this->con,$query);
+
+                $afectadas[$partida["idformapago"]] = true;
+                $afectadas[$idformapagonuevo] = true;
+                $cambios++;
+            }
+
+            if($cambios==0){
+                throw new Exception("No seleccionaste ningún cambio de forma de pago");
+            }
+
+            // En un corte activo el desglose se calcula al vuelo, pero al cerrarlo se congela
+            // en tcortesucursal_formaspago: si no se recalculan ahí las formas afectadas, el
+            // listado de cortes y los PDFs siguen mostrando el desglose anterior.
+            if($ticket["corte_status"]=="T"){
+                $this->recalcularFormasPagoCorte($ticket["idcorte"], array_keys($afectadas));
+            }
+
+            $respuesta = array(
+                "respuesta" => "OK",
+                "tipo" => "mensajereload",
+                "titulo" => "Forma de pago actualizada",
+                "mensaje" => "Se ".(($cambios==1) ? "actualizó 1 partida" : "actualizaron ".$cambios." partidas")." del ticket"
+            );
+
+        }catch(Exception $e){
+            $respuesta = array(
+                "respuesta" => "ERROR",
+                "mensaje" => $e->getMessage()
+            );
+        }catch(Throwable $e){
+            $respuesta = array(
+                "respuesta" => "ERROR",
+                "mensaje" => $e->getMessage()
+            );
+        }finally{
+            return $respuesta;
+        }
+    }
+
+    /**
+     * Rehace el total congelado de las formas de pago indicadas en un corte ya cerrado.
+     * Suma monto sin convertir a pesos, igual que el cierre del corte, porque solo se
+     * reasignan formas capturadas en pesos.
+     */
+    private function recalcularFormasPagoCorte($idcorte, $formaspago){
+        $idcorte = mysqli_real_escape_string($this->con,$idcorte);
+
+        foreach($formaspago as $idformapago){
+            $idformapago = mysqli_real_escape_string($this->con,$idformapago);
+
+            $query = "
+            select
+                sum(monto) as monto
+            from
+                tformaspagoticket
+            where
+                idticket in (select idticket from ttickets where idcorte = '".$idcorte."') and
+                idformapago = '".$idformapago."'";
+            $monto = mysqli_fetch_assoc(mysqli_query($this->con,$query))["monto"];
+            $monto = ($monto > 0) ? $monto : 0;
+
+            $query = "
+            select
+                idformapago
+            from
+                tcortesucursal_formaspago
+            where
+                idcorte = '".$idcorte."' and
+                idformapago = '".$idformapago."'";
+
+            if(mysqli_num_rows(mysqli_query($this->con,$query))>0){
+                $query = "
+                update
+                    tcortesucursal_formaspago
+                set
+                    total = '".$monto."'
+                where
+                    idcorte = '".$idcorte."' and
+                    idformapago = '".$idformapago."'";
+            }else{
+                $query = "
+                insert
+                into
+                    tcortesucursal_formaspago
+                (
+                    idcorte,
+                    idformapago,
+                    total
+                ) values (
+                    '".$idcorte."',
+                    '".$idformapago."',
+                    '".$monto."'
+                )";
+            }
+            mysqli_query($this->con,$query);
+        }
+    }
+
     /**
      * getNumCer
      * Obtener el numero de certificado de un archivo .cer
