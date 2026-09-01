@@ -153,12 +153,12 @@ if($facturaviva){
         Swal.fire({
             title: "¿Confirmas el cambio?",
             text: mensaje,
-            icon: "warning",
+            type: "warning",
             showCancelButton: true,
             confirmButtonText: "Sí, cambiar",
             cancelButtonText: "Cancelar"
         }).then((result) => {
-            if(result.isConfirmed){
+            if(result.value){
                 validarFormulario('formCambiarFormaPago');
             }
         });
