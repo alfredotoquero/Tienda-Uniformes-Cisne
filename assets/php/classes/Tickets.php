@@ -101,7 +101,7 @@ class Tickets{
     public function facturarTicket($post){
         try{
             $idticket = mysqli_real_escape_string($this->con,$post["idticket"]);
-            $idusuario = mysqli_real_escape_string($this->con,$post["idusuario"]);
+            $idvendedor = mysqli_real_escape_string($this->con,$post["idvendedor"]);
             $razonsocial = mysqli_real_escape_string($this->con,$post["txtRazonSocial"]);
             $rfc = mysqli_real_escape_string($this->con,$post["txtRFC"]);
             $codigo_postal = mysqli_real_escape_string($this->con,$post["txtCodigoPostal"]);
@@ -320,12 +320,15 @@ class Tickets{
             file_put_contents($ruta_server."/txts/facturarPedido.txt",print_r($datos,true)."\n\n".print_r($response,true));
 
             if ($response["response"] == true) {
+                // La factura de ticket la emite un vendedor, no un usuario del administrativo:
+                // se guarda en idvendedor y idusuario queda en NULL. Mandar el id del vendedor
+                // en idusuario rompe la llave foránea a tusuarios.
                 $query = "
                 insert
                 into
                     tfacturas
                 (
-                    idusuario,
+                    idvendedor,
                     idemisor,
                     razonsocial,
                     rfc,
@@ -343,7 +346,7 @@ class Tickets{
                     uuid,
                     timbrado
                 ) values (
-                    '".$idusuario."',
+                    '".$idvendedor."',
                     '".$idemisor."',
                     '".$razonsocial."',
                     '".$rfc."',
