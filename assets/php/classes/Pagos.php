@@ -194,7 +194,7 @@ class Pagos{
             join
                 tvendedores v
             on
-                a.idusuario = v.idvendedor
+                a.idvendedor = v.idvendedor
             where
                 a.fecha between '".$fecha_i."' and '".$fecha_f."' and
                 v.idsucursal = '".$idsucursal."'
@@ -618,14 +618,16 @@ class Pagos{
             // Iniciar transacción
             mysqli_begin_transaction($this->con);
 
-            // Insertar registro en tpagos sin serie, folio, uuid ni timbrado
-            $idusuario = $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"];
+            // Insertar registro en tpagos sin serie, folio, uuid ni timbrado. El pago lo
+            // captura un vendedor, así que va en idvendedor e idusuario queda en NULL:
+            // idusuario es para los usuarios del administrativo (tusuarios).
+            $idvendedor = $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"];
             $query = "
             insert
             into
                 tpagos
             (
-                idusuario,
+                idvendedor,
                 idcliente,
                 cliente,
                 total,
@@ -633,7 +635,7 @@ class Pagos{
                 fecha,
                 status
             ) values (
-                '".$idusuario."',
+                '".$idvendedor."',
                 ".$idcliente_sql.",
                 ".$cliente_sql.",
                 '".$total."',
@@ -648,7 +650,6 @@ class Pagos{
             $idpago = mysqli_insert_id($this->con);
 
             // Obtener datos del vendedor
-            $idvendedor = $_SESSION["v3nd3d0rpl4y3r4spvc1sn3usr"];
             $query = "
             select
                 *
